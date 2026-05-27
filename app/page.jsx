@@ -37,19 +37,33 @@ function loadData(key, defaultValue = null) {
 // ============================================================
 // API ВЫЗОВЫ
 // ============================================================
-async function callAI(agentId, history, userMessage) {
+async function callAI(agentId, history, userMessage, telegramId) {
   try {
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ agentId, history, message: userMessage })
+      body: JSON.stringify({ agentId, history, message: userMessage, telegramId })
     });
+    if (res.status === 429) {
+      const data = await res.json();
+      return { reply: `⏱ ${data.message || 'Слишком много запросов. Попробуйте позже.'}`, sources: [] };
+    }
     if (!res.ok) throw new Error('API error');
     const data = await res.json();
-    return data.reply;
+    return { reply: data.reply, sources: data.sources || [] };
   } catch (error) {
-    return 'Извините, не удалось получить ответ. Проверьте интернет и попробуйте ещё раз.';
+    return { reply: 'Извините, не удалось получить ответ. Проверьте интернет и попробуйте ещё раз.', sources: [] };
   }
+}
+
+async function trackAnalytics(event, data = {}) {
+  try {
+    await fetch('/api/analytics/track', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event, initData: getInitData(), data })
+    });
+  } catch {}
 }
 
 async function verifyTelegramAuth() {
@@ -63,7 +77,16 @@ async function verifyTelegramAuth() {
     });
     if (!res.ok) return null;
     const data = await res.json();
-    return data.verified ? data.user : null;
+    if (data.verified) {
+      // Регистрируем пользователя в БД для push-уведомлений (best effort)
+      fetch('/api/users/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ initData })
+      }).catch(() => {});
+      return data.user;
+    }
+    return null;
   } catch {
     return null;
   }
@@ -88,19 +111,20 @@ function OnboardingScreen({ onComplete }) {
   const Icon = current.icon;
 
   return (
-    <div className="min-h-screen flex flex-col bg-stone-50">
+    <div className="min-h-screen flex flex-col bg-stone-50 mesh-bg">
       <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
-        <div className={`w-32 h-32 rounded-3xl bg-gradient-to-br ${current.gradient} flex items-center justify-center mb-8 shadow-xl`}>
+        <div className={`relative w-32 h-32 rounded-3xl bg-gradient-to-br ${current.gradient} flex items-center justify-center mb-8 shadow-2xl animate-scale-in`} key={slide}>
+          <div className={`absolute inset-0 bg-gradient-to-br ${current.gradient} rounded-3xl blur-2xl opacity-50 -z-10`}></div>
           <Icon className="w-16 h-16 text-white" strokeWidth={1.5} />
         </div>
-        <h1 className="text-4xl font-bold text-stone-900 mb-2 tracking-tight">{current.title}</h1>
-        <p className="text-lg text-stone-600 mb-6">{current.subtitle}</p>
-        <p className="text-stone-500 max-w-sm leading-relaxed">{current.description}</p>
+        <h1 className="text-4xl font-bold text-stone-900 mb-2 tracking-tight animate-fade-in" key={`title-${slide}`}>{current.title}</h1>
+        <p className="text-lg text-stone-600 mb-6 animate-fade-in">{current.subtitle}</p>
+        <p className="text-stone-500 max-w-sm leading-relaxed animate-fade-in">{current.description}</p>
       </div>
       <div className="px-6 pb-10">
         <div className="flex justify-center gap-2 mb-6">
           {slides.map((_, i) => (
-            <div key={i} className={`h-1.5 rounded-full transition-all ${i === slide ? 'w-8 bg-stone-900' : 'w-1.5 bg-stone-300'}`} />
+            <div key={i} className={`h-1.5 rounded-full transition-all duration-300 ${i === slide ? 'w-8 bg-stone-900' : 'w-1.5 bg-stone-300'}`} />
           ))}
         </div>
         <button
@@ -109,7 +133,7 @@ function OnboardingScreen({ onComplete }) {
             if (slide < slides.length - 1) setSlide(slide + 1);
             else onComplete();
           }}
-          className="w-full bg-stone-900 text-white py-4 rounded-2xl font-semibold"
+          className="btn-press w-full bg-stone-900 text-white py-4 rounded-2xl font-semibold shadow-lg shadow-stone-900/20"
         >
           {slide < slides.length - 1 ? 'Далее' : 'Начать'}
         </button>
@@ -148,16 +172,16 @@ function AuthScreen({ onAuthSuccess, onSkip }) {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-stone-50">
+    <div className="min-h-screen flex flex-col bg-stone-50 mesh-bg">
       <div className="flex-1 flex flex-col justify-center px-6">
-        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center mb-6 mx-auto shadow-lg">
-          <Sparkles className="w-8 h-8 text-white" strokeWidth={2} />
+        <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center mb-6 mx-auto shadow-2xl shadow-purple-500/30 animate-scale-in">
+          <Sparkles className="w-10 h-10 text-white" strokeWidth={2} />
         </div>
-        <h2 className="text-3xl font-bold text-center text-stone-900 mb-2">Добро пожаловать!</h2>
-        <p className="text-stone-500 text-center mb-10">Войдите через Telegram — это безопасно и быстро</p>
+        <h2 className="text-3xl font-bold text-center text-stone-900 mb-2 tracking-tight">Добро пожаловать!</h2>
+        <p className="text-stone-500 text-center mb-10">Войдите через Telegram — быстро и безопасно</p>
 
         {error && (
-          <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 mb-4 flex gap-2">
+          <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 mb-4 flex gap-2 animate-slide-up">
             <AlertCircle className="w-5 h-5 text-rose-600 flex-shrink-0" />
             <p className="text-sm text-rose-700">{error}</p>
           </div>
@@ -166,7 +190,7 @@ function AuthScreen({ onAuthSuccess, onSkip }) {
         <button
           onClick={handleTelegramAuth}
           disabled={authenticating}
-          className="w-full bg-stone-900 text-white py-4 rounded-2xl font-semibold flex items-center justify-center gap-2"
+          className="btn-press w-full bg-stone-900 text-white py-4 rounded-2xl font-semibold flex items-center justify-center gap-2 shadow-lg shadow-stone-900/20"
         >
           {authenticating ? (
             <><Loader2 className="w-5 h-5 animate-spin" /> Проверка...</>
@@ -188,14 +212,14 @@ function AuthScreen({ onAuthSuccess, onSkip }) {
 // ============================================================
 function StatCard({ label, value, icon: Icon, color, sublabel }) {
   return (
-    <div className="bg-white rounded-2xl p-4 border border-stone-100">
+    <div className="bg-white rounded-2xl p-4 border border-stone-100 shadow-sm hover:shadow-md transition-shadow">
       <div className="flex items-start justify-between mb-3">
-        <div className={`w-10 h-10 rounded-xl ${color} flex items-center justify-center`}>
+        <div className={`w-10 h-10 rounded-xl ${color} flex items-center justify-center shadow-sm`}>
           <Icon className="w-5 h-5 text-white" strokeWidth={2} />
         </div>
         <span className="text-xs font-medium text-stone-400">{sublabel}</span>
       </div>
-      <div className="text-2xl font-bold text-stone-900">{value}</div>
+      <div className="text-2xl font-bold text-stone-900 tracking-tight">{value}</div>
       <div className="text-xs text-stone-500 mt-1">{label}</div>
     </div>
   );
@@ -206,19 +230,23 @@ function HomeScreen({ user, streak, healthScore, financeScore, onSelectAgent, on
   const greeting = hour < 6 ? 'Доброй ночи' : hour < 12 ? 'Доброе утро' : hour < 18 ? 'Добрый день' : 'Добрый вечер';
 
   return (
-    <div className="min-h-screen bg-stone-50 pb-24">
-      <div className="bg-gradient-to-br from-stone-900 via-stone-800 to-stone-900 text-white px-6 pt-8 pb-8 rounded-b-3xl">
-        <div className="flex justify-between items-start mb-6">
+    <div className="min-h-screen bg-stone-50 pb-24 mesh-bg">
+      <div className="relative bg-gradient-to-br from-stone-900 via-stone-800 to-stone-900 text-white px-6 pt-8 pb-8 rounded-b-3xl overflow-hidden">
+        {/* Декоративные блёстки */}
+        <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+        <div className="absolute bottom-0 left-0 w-48 h-48 bg-purple-500/10 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2"></div>
+
+        <div className="relative flex justify-between items-start mb-6 animate-fade-in">
           <div>
             <p className="text-stone-400 text-sm">{greeting},</p>
-            <h1 className="text-2xl font-bold mt-1">{user.name}</h1>
+            <h1 className="text-2xl font-bold mt-1 tracking-tight">{user.name}</h1>
           </div>
-          <button onClick={() => { hapticFeedback('light'); onOpenProfile(); }} className="w-11 h-11 bg-stone-700 rounded-full flex items-center justify-center">
+          <button onClick={() => { hapticFeedback('light'); onOpenProfile(); }} className="btn-press w-11 h-11 bg-white/10 backdrop-blur-md border border-white/10 rounded-full flex items-center justify-center">
             <span className="font-semibold">{user.name[0]?.toUpperCase()}</span>
           </button>
         </div>
         {user.subscription === 'trial' && (
-          <button onClick={() => { hapticFeedback('light'); onOpenSubscription(); }} className="w-full bg-amber-500/20 border border-amber-400/30 rounded-2xl px-4 py-3 flex items-center justify-between">
+          <button onClick={() => { hapticFeedback('light'); onOpenSubscription(); }} className="btn-press relative w-full bg-amber-500/20 border border-amber-400/30 rounded-2xl px-4 py-3 flex items-center justify-between animate-fade-in">
             <div className="flex items-center gap-2">
               <Crown className="w-4 h-4 text-amber-300" />
               <span className="text-sm text-amber-100">Пробный период · осталось {daysLeftInTrial} дн.</span>
@@ -229,30 +257,30 @@ function HomeScreen({ user, streak, healthScore, financeScore, onSelectAgent, on
       </div>
 
       <div className="px-4 -mt-4 mb-4">
-        <button onClick={() => { hapticFeedback('light'); onOpenCheckin(); }} className="w-full bg-white rounded-2xl p-4 border border-stone-100 flex items-center gap-4 text-left">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-400 to-amber-500 flex items-center justify-center">
+        <button onClick={() => { hapticFeedback('light'); onOpenCheckin(); }} className="btn-press w-full bg-white rounded-2xl p-4 border border-stone-100 flex items-center gap-4 text-left shadow-sm animate-slide-up">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-400 to-amber-500 flex items-center justify-center animate-flame">
             <Flame className="w-6 h-6 text-white" strokeWidth={2} />
           </div>
           <div className="flex-1">
-            <div className="font-semibold text-stone-900">{streak} дней подряд</div>
+            <div className="font-semibold text-stone-900">{streak} {streak === 1 ? 'день' : streak < 5 ? 'дня' : 'дней'} подряд</div>
             <div className="text-xs text-stone-500">Сделать ежедневный чек-ин</div>
           </div>
           <ChevronRight className="w-5 h-5 text-stone-400" />
         </button>
       </div>
 
-      <div className="px-4 mb-6 grid grid-cols-2 gap-3">
+      <div className="px-4 mb-6 grid grid-cols-2 gap-3 stagger">
         <StatCard label="Здоровье" value={`${healthScore}/100`} icon={Heart} color="bg-gradient-to-br from-rose-400 to-red-500" sublabel="неделя" />
         <StatCard label="Финансы" value={`${financeScore}/100`} icon={TrendingUp} color="bg-gradient-to-br from-emerald-400 to-teal-500" sublabel="неделя" />
       </div>
 
       <div className="px-4">
         <h2 className="text-sm font-semibold text-stone-500 uppercase tracking-wider mb-3 px-2">Ваши помощники</h2>
-        <div className="space-y-3">
+        <div className="space-y-3 stagger">
           {Object.values(AGENTS).map(agent => {
             const Icon = ICONS[agent.iconName];
             return (
-              <button key={agent.id} onClick={() => { hapticFeedback('medium'); onSelectAgent(agent.id); }} className="w-full bg-white rounded-2xl p-4 border border-stone-100 flex items-center gap-4 text-left">
+              <button key={agent.id} onClick={() => { hapticFeedback('medium'); onSelectAgent(agent.id); }} className="btn-press w-full bg-white rounded-2xl p-4 border border-stone-100 flex items-center gap-4 text-left shadow-sm">
                 <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${agent.gradient} flex items-center justify-center shadow-md flex-shrink-0`}>
                   <Icon className="w-7 h-7 text-white" strokeWidth={1.75} />
                 </div>
@@ -271,14 +299,17 @@ function HomeScreen({ user, streak, healthScore, financeScore, onSelectAgent, on
         </div>
       </div>
 
-      <div className="px-4 mt-6">
-        <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl p-5 border border-indigo-100">
-          <div className="flex items-center gap-2 mb-2">
-            <Sparkles className="w-4 h-4 text-indigo-600" />
-            <span className="text-xs font-semibold uppercase tracking-wider text-indigo-600">Совет дня</span>
+      <div className="px-4 mt-6 animate-slide-up">
+        <div className="relative overflow-hidden bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 rounded-2xl p-5 text-white shadow-lg">
+          <div className="absolute -top-8 -right-8 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
+          <div className="relative">
+            <div className="flex items-center gap-2 mb-2">
+              <Sparkles className="w-4 h-4 text-yellow-200" />
+              <span className="text-xs font-semibold uppercase tracking-wider text-white/90">Совет дня</span>
+            </div>
+            <h3 className="font-bold text-white mb-2 text-lg">Депозиты застрахованы</h3>
+            <p className="text-sm text-white/90 leading-relaxed">Депозиты в банках РК защищены КФГД на сумму до 20 млн ₸. Спросите Ержана о выгодных вкладах.</p>
           </div>
-          <h3 className="font-semibold text-stone-900 mb-2">Депозит или ОФЗ?</h3>
-          <p className="text-sm text-stone-600 leading-relaxed">Депозиты в РК застрахованы на сумму до 20 млн ₸ Казахстанским фондом гарантирования депозитов.</p>
         </div>
       </div>
     </div>
@@ -378,20 +409,32 @@ function AgentChat({ agent, messages, onSend, onBack, loading }) {
       </div>
       <div className="flex-1 px-4 py-4 space-y-4 overflow-y-auto">
         {messages.length === 0 && (
-          <div className="text-center py-8">
-            <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${agent.gradient} flex items-center justify-center mx-auto mb-4 shadow-lg`}>
-              <Icon className="w-8 h-8 text-white" strokeWidth={1.5} />
+          <div className="text-center py-8 animate-scale-in">
+            <div className={`w-20 h-20 rounded-3xl bg-gradient-to-br ${agent.gradient} flex items-center justify-center mx-auto mb-4 shadow-xl`}>
+              <Icon className="w-10 h-10 text-white" strokeWidth={1.5} />
             </div>
-            <h3 className="font-semibold text-stone-900 mb-1">Здравствуйте! Я {agent.name}</h3>
-            <p className="text-sm text-stone-500 max-w-xs mx-auto">{agent.description}</p>
+            <h3 className="font-bold text-stone-900 mb-1 text-lg">Здравствуйте! Я {agent.name}</h3>
+            <p className="text-sm text-stone-500 max-w-xs mx-auto leading-relaxed">{agent.description}</p>
+            <p className="text-xs text-stone-400 mt-3">Выберите вопрос ниже или задайте свой ↓</p>
           </div>
         )}
         {messages.map((msg, i) => (
-          <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+          <div key={i} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
             <div className={`max-w-[85%] rounded-2xl px-4 py-3 ${msg.role === 'user' ? 'bg-stone-900 text-white rounded-br-md' : 'bg-white text-stone-900 border border-stone-100 rounded-bl-md'}`}>
               <div className="whitespace-pre-wrap text-sm leading-relaxed">{msg.content}</div>
               <div className="text-[10px] mt-1 text-stone-400">{formatTime(msg.time)}</div>
             </div>
+            {msg.role === 'assistant' && msg.sources && msg.sources.length > 0 && (
+              <div className="max-w-[85%] mt-2 space-y-1.5">
+                <div className="text-[10px] uppercase tracking-wider font-semibold text-stone-400 px-1">📚 Источники</div>
+                {msg.sources.map((src, idx) => (
+                  <div key={idx} className={`${agent.softBg} border ${agent.softBorder} rounded-xl px-3 py-2`}>
+                    <div className={`text-xs font-semibold ${agent.textColor}`}>{src.source}, {src.articles}</div>
+                    <div className="text-[11px] text-stone-600 mt-0.5">{src.topic}</div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ))}
         {loading && (
@@ -640,6 +683,7 @@ export default function App() {
   const handleLogin = (userData) => {
     setUser(userData);
     saveData('user', userData);
+    trackAnalytics('login');
     setScreen('home');
   };
 
@@ -657,8 +701,13 @@ export default function App() {
     setAllMessages(updated);
     setLoading(true);
 
-    const aiResponse = await callAI(currentAgentId, allMessages[currentAgentId], text);
-    const newAiMsg = { role: 'assistant', content: aiResponse, time: new Date().toISOString() };
+    const { reply, sources } = await callAI(currentAgentId, allMessages[currentAgentId], text, user?.telegramId);
+    const newAiMsg = {
+      role: 'assistant',
+      content: reply,
+      time: new Date().toISOString(),
+      sources: sources && sources.length > 0 ? sources : undefined
+    };
     const final = { ...updated, [currentAgentId]: [...updated[currentAgentId], newAiMsg] };
     setAllMessages(final);
     saveData('messages', final);
@@ -679,15 +728,23 @@ export default function App() {
       saveData('lastCheckin', data);
       saveData('healthScore', newHealthScore);
       saveData('totalCheckins', totalCheckins + 1);
+      trackAnalytics('checkin');
     }
     setShowCheckin(false);
   };
 
   const handleSubscribe = () => {
+    trackAnalytics('subscription_clicked');
     const newUser = { ...user, subscription: 'premium' };
     setUser(newUser);
     saveData('user', newUser);
     setScreen('home');
+  };
+
+  const handleSelectAgent = (id) => {
+    trackAnalytics('agent_open', { agent: id });
+    setCurrentAgentId(id);
+    setScreen('chat');
   };
 
   if (screen === 'loading') {
@@ -705,7 +762,7 @@ export default function App() {
     <div className="max-w-md mx-auto bg-stone-50 min-h-screen relative">
       {screen === 'home' && (
         <HomeScreen user={user} streak={streak} healthScore={healthScore} financeScore={financeScore}
-          onSelectAgent={(id) => { setCurrentAgentId(id); setScreen('chat'); }}
+          onSelectAgent={handleSelectAgent}
           onOpenCheckin={() => setShowCheckin(true)}
           onOpenProfile={() => setScreen('profile')}
           onOpenSubscription={() => setScreen('subscription')}

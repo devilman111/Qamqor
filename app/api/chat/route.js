@@ -1,9 +1,9 @@
-// /api/chat — серверный прокси к Gemini API
-// API-ключ хранится в env var GOOGLE_AI_API_KEY (никогда не в браузере)
-
+// /api/chat — прокси к Gemini с rate limit, аналитикой и RAG для юриста
 import { NextResponse } from 'next/server';
+import { checkRateLimit } from '../../../lib/ratelimit';
+import { trackEvent } from '../../../lib/analytics';
+import { retrieveLegalContext, formatChunksForPrompt } from '../../../lib/legal-rag';
 
-// Системные промпты живут на сервере — нельзя их менять с клиента
 const SYSTEM_PROMPTS = {
   doctor: `Ты — Аружан, медицинский AI-ассистент в приложении Qamqor для граждан Казахстана.
 
@@ -32,16 +32,13 @@ const SYSTEM_PROMPTS = {
 - Даёшь информационные справки по законодательству РК
 - Объясняешь права и обязанности граждан
 - Помогаешь разобраться в документах и договорах
-- Подсказываешь, какие нормы применимы
 
-ОБЛАСТИ ЭКСПЕРТИЗЫ (законы РК):
-- Трудовой кодекс РК
-- Гражданский кодекс РК
-- Налоговый кодекс РК
-- Семейный кодекс РК
-- Закон о защите прав потребителей
-- Регистрация ИП, ТОО
-- Правила дорожного движения РК
+ВАЖНО ПРО ИСТОЧНИКИ:
+- Ниже в каждом запросе тебе будут переданы РЕЛЕВАНТНЫЕ ИЗВЛЕЧЁННЫЕ нормы из законов РК
+- Используй ТОЛЬКО эту информацию как фактическую базу
+- ВСЕГДА ссылайся на конкретные источники: "Согласно [Источник 1]..." или "По статье X Трудового кодекса РК..."
+- Если в источниках нет ответа на вопрос — честно скажи "В моей базе нет точной нормы по этому вопросу, рекомендую обратиться к юристу или проверить на adilet.zan.kz"
+- НЕ выдумывай статьи и номера
 
 КРИТИЧЕСКИЕ ОГРАНИЧЕНИЯ:
 - Это ИНФОРМАЦИОННАЯ СПРАВКА, не юридическое заключение
@@ -49,10 +46,10 @@ const SYSTEM_PROMPTS = {
 - Для сложных вопросов — направляй к юристу
 
 СТИЛЬ:
-- Чёткий, структурированный
-- Ссылайся на конкретные статьи кодексов РК когда возможно
+- Чёткий, структурированный (если уместно — маркированный список)
+- Цитируй конкретные статьи кодексов из переданных источников
 - Указывай практические шаги
-- В конце ответа — пометка что это информационная справка`,
+- В конце ответа — пометка "Это информационная справка. Для важных решений — к юристу."`,
 
   financier: `Ты — Ержан, финансовый AI-ассистент в приложении Qamqor для граждан Казахстана.
 
@@ -88,9 +85,9 @@ const SYSTEM_PROMPTS = {
 
 export async function POST(request) {
   try {
-    const { agentId, history, message } = await request.json();
+    const { agentId, history, message, telegramId } = await request.json();
 
-    const systemPrompt = SYSTEM_PROMPTS[agentId];
+    let systemPrompt = SYSTEM_PROMPTS[agentId];
     if (!systemPrompt) {
       return NextResponse.json({ error: 'Unknown agent' }, { status: 400 });
     }
@@ -100,8 +97,32 @@ export async function POST(request) {
       return NextResponse.json({ error: 'API key not configured' }, { status: 500 });
     }
 
-    // Конвертируем историю в формат Gemini
-    // Gemini использует роли 'user' и 'model'
+    // 1. RATE LIMIT
+    if (telegramId) {
+      const rl = await checkRateLimit(telegramId, 'trial');
+      if (!rl.allowed) {
+        return NextResponse.json({
+          error: 'rate_limit',
+          message: rl.message,
+          retryAfter: rl.retryAfter
+        }, { status: 429 });
+      }
+    }
+
+    // 2. RAG для юриста — подмешиваем релевантные нормы законов
+    let retrievedSources = [];
+    if (agentId === 'lawyer') {
+      const { chunks, status } = await retrieveLegalContext(message, 4);
+      if (chunks.length > 0) {
+        retrievedSources = chunks;
+        systemPrompt += `\n\nРЕЛЕВАНТНЫЕ НОРМЫ ИЗ ЗАКОНОВ РК (используй ТОЛЬКО эту информацию):\n\n${formatChunksForPrompt(chunks)}`;
+      } else if (status === 'not_seeded') {
+        // База ещё не проинициализирована — мягко предупреждаем
+        systemPrompt += `\n\n[ВНИМАНИЕ: база знаний ещё не загружена. Отвечай только общими принципами и направляй к юристу.]`;
+      }
+    }
+
+    // 3. Конвертируем историю в формат Gemini
     const contents = [];
     for (const msg of history || []) {
       contents.push({
@@ -109,26 +130,17 @@ export async function POST(request) {
         parts: [{ text: msg.content }]
       });
     }
-    contents.push({
-      role: 'user',
-      parts: [{ text: message }]
-    });
+    contents.push({ role: 'user', parts: [{ text: message }] });
 
-    // Запрос к Gemini 2.5 Flash
+    // 4. Запрос к Gemini
     const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-
     const geminiResponse = await fetch(geminiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents,
-        systemInstruction: {
-          parts: [{ text: systemPrompt }]
-        },
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 1000,
-        }
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        generationConfig: { temperature: 0.7, maxOutputTokens: 1200 }
       })
     });
 
@@ -141,7 +153,18 @@ export async function POST(request) {
     const data = await geminiResponse.json();
     const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Извините, не удалось получить ответ.';
 
-    return NextResponse.json({ reply });
+    // 5. Аналитика
+    trackEvent('chat_message', { userId: telegramId, agent: agentId }).catch(() => {});
+
+    // 6. Возвращаем ответ + источники (для лоера показываем их в UI)
+    return NextResponse.json({
+      reply,
+      sources: retrievedSources.map(s => ({
+        source: s.source,
+        articles: s.articles,
+        topic: s.topic
+      }))
+    });
   } catch (error) {
     console.error('Chat error:', error);
     return NextResponse.json({ error: 'Internal error' }, { status: 500 });
