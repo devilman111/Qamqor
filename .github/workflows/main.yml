@@ -16,4 +16,4 @@ jobs:
       - name: Push to GitLab
         run: |
           git remote add gitlab https://oauth2:${{ secrets.GITLAB_TOKEN }}@gitlab.com/devilman111/Qamqor.git
-          git push gitlab main 
+          git push gitlab main --force
