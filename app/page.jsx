@@ -1161,7 +1161,7 @@ function DocumentFormScreen({ template, onBack, onGenerated }) {
       });
       const d = await res.json();
       if (!res.ok) { setError(d.message || 'Ошибка генерации'); setGenerating(false); return; }
-      onGenerated(d);
+      onGenerated({ ...d, _templateId: template.id, _fields: values, _initData: getInitData() });
     } catch { setError('Не удалось сгенерировать документ'); setGenerating(false); }
   };
 
@@ -1237,8 +1237,10 @@ function DocumentFormScreen({ template, onBack, onGenerated }) {
 /* ============================================================
    DOCUMENT RESULT
    ============================================================ */
-function DocumentResultScreen({ document, onBack, onNew }) {
+function DocumentResultScreen({ document, onBack, onNew, templateId, fields, initData }) {
   const [copied, setCopied] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadErr, setDownloadErr] = useState('');
 
   const handleCopy = () => {
     try {
@@ -1256,6 +1258,109 @@ function DocumentResultScreen({ document, onBack, onNew }) {
     setTimeout(() => setCopied(false), 2500);
   };
 
+  const handleDownloadDocx = async () => {
+    setDownloading(true);
+    setDownloadErr('');
+    try {
+      const res = await fetch('/api/documents/download', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ templateId, fields, initData }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Ошибка генерации');
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = window.document.createElement('a');
+      a.href = url;
+      const cd = res.headers.get('content-disposition') || '';
+      const match = cd.match(/filename\*=UTF-8''(.+)/);
+      a.download = match ? decodeURIComponent(match[1]) : 'document.docx';
+      a.click();
+      URL.revokeObjectURL(url);
+      hapticFeedback('success');
+    } catch (e) {
+      setDownloadErr(e.message);
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  // Рендер документа как A4-страница
+  const renderDocumentPreview = (text) => {
+    const lines = text.split('\n');
+    return lines.map((line, i) => {
+      const trimmed = line.trim();
+      if (!trimmed) return <div key={i} className="h-4" />;
+
+      // Главный заголовок (первые 6 строк, всё заглавное)
+      const isTitle = i < 8 && trimmed === trimmed.toUpperCase() && trimmed.length > 3 && trimmed.length < 120
+        && /^(ДОГОВОР|РАСПИСКА|ДОВЕРЕННОСТЬ|ЗАЯВЛЕНИЕ|ПРЕТЕНЗИЯ|АКТ|СОГЛАШЕНИЕ|ТРУДОВОЙ|ИСКОВОЕ|ПРИКАЗ)/.test(trimmed);
+
+      // Заголовок раздела: "1. ПРЕДМЕТ ДОГОВОРА"
+      const isSection = /^\d+\.\s+[А-ЯA-Z\s]+$/.test(trimmed) && trimmed.length < 80;
+
+      // Строка подписи
+      const isSign = trimmed.includes('___') || trimmed.includes('(подпись') || trimmed.includes('(печать');
+
+      // Колонтитул (г. Город ... дата)
+      const isHeader = /^г\.\s/.test(trimmed) && i < 12;
+
+      if (isTitle) {
+        return (
+          <p key={i} style={{ fontFamily: 'Times New Roman, serif', fontSize: '16pt', fontWeight: 'bold', textAlign: 'center', margin: '8px 0 4px' }}>
+            {trimmed}
+          </p>
+        );
+      }
+      if (isSection) {
+        return (
+          <p key={i} style={{ fontFamily: 'Times New Roman, serif', fontSize: '14pt', fontWeight: 'bold', margin: '10px 0 4px' }}>
+            {trimmed}
+          </p>
+        );
+      }
+      if (isHeader) {
+        return (
+          <p key={i} style={{ fontFamily: 'Times New Roman, serif', fontSize: '14pt', margin: '4px 0', display: 'flex', justifyContent: 'space-between' }}>
+            <span>{trimmed.split(/\s{3,}/)[0]}</span>
+            <span>{trimmed.split(/\s{3,}/)[1] || ''}</span>
+          </p>
+        );
+      }
+      if (isSign) {
+        return (
+          <p key={i} style={{ fontFamily: 'Times New Roman, serif', fontSize: '13pt', margin: '3px 0', whiteSpace: 'pre' }}>
+            {line}
+          </p>
+        );
+      }
+      // Пункт с номером — жирный номер
+      if (/^\d+\.\d+\./.test(trimmed)) {
+        return (
+          <p key={i} style={{ fontFamily: 'Times New Roman, serif', fontSize: '14pt', textAlign: 'justify', margin: '3px 0', paddingLeft: '16px' }}>
+            {trimmed}
+          </p>
+        );
+      }
+      // Подпункт со "—"
+      if (trimmed.startsWith('—') || trimmed.startsWith('-')) {
+        return (
+          <p key={i} style={{ fontFamily: 'Times New Roman, serif', fontSize: '14pt', margin: '2px 0', paddingLeft: '24px' }}>
+            {trimmed}
+          </p>
+        );
+      }
+      return (
+        <p key={i} style={{ fontFamily: 'Times New Roman, serif', fontSize: '14pt', textAlign: 'justify', textIndent: '36px', margin: '3px 0', lineHeight: '1.5' }}>
+          {trimmed}
+        </p>
+      );
+    });
+  };
+
   return (
     <div className="min-h-screen bg-[#F5F3F0] pb-10">
       <div className="bg-gradient-to-br from-emerald-500 to-teal-600 text-white px-5 pt-14 pb-8 rounded-b-[32px] overflow-hidden relative">
@@ -1269,32 +1374,61 @@ function DocumentResultScreen({ document, onBack, onNew }) {
             <CheckCircle className="w-7 h-7 text-white" strokeWidth={1.5} />
           </div>
           <h2 className="text-[22px] font-black tracking-tight mb-1">{document.title}</h2>
-          <p className="text-white/70 text-[13px]">Документ готов</p>
+          <p className="text-white/70 text-[13px]">Документ готов — просмотр и скачивание</p>
         </div>
       </div>
 
       <div className="px-4 mt-4">
-        <div className="bg-white rounded-3xl shadow-card p-4 mb-4 overflow-hidden">
-          <pre className="text-[12px] text-stone-800 whitespace-pre-wrap font-mono leading-relaxed overflow-x-auto">
-            {document.document}
-          </pre>
+        {/* A4 preview */}
+        <div className="mb-3">
+          <p className="text-[12px] text-stone-500 font-medium mb-2 ml-1">📄 Предпросмотр документа</p>
+          <div className="overflow-x-auto">
+            <div style={{
+              background: '#fff',
+              width: '210mm',
+              minWidth: '210mm',
+              maxWidth: '210mm',
+              margin: '0 auto',
+              padding: '30mm 20mm 20mm 30mm',
+              boxShadow: '0 4px 24px rgba(0,0,0,0.12)',
+              borderRadius: '2px',
+              lineHeight: '1.5',
+            }}>
+              {renderDocumentPreview(document.document)}
+            </div>
+          </div>
         </div>
 
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 mb-4">
-          <p className="text-[12px] text-amber-800 leading-relaxed">
-            <strong>⚠️ Важно:</strong> Проверьте все данные перед использованием. При необходимости — заверьте у нотариуса.
-          </p>
-        </div>
+        {document.legalNotes && (
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 mb-4">
+            <p className="text-[12px] text-amber-800 leading-relaxed">
+              <strong>⚠️ Важно:</strong> {document.legalNotes}
+            </p>
+          </div>
+        )}
+
+        {downloadErr && (
+          <div className="bg-red-50 border border-red-200 rounded-2xl px-4 py-3 mb-3">
+            <p className="text-[12px] text-red-700">{downloadErr}</p>
+          </div>
+        )}
 
         <div className="space-y-2">
+          <button onClick={handleDownloadDocx} disabled={downloading}
+                  className="btn-press w-full py-4 rounded-2xl font-bold text-[15px] flex items-center justify-center gap-2 shadow-elevated bg-stone-900 text-white disabled:opacity-60">
+            {downloading
+              ? <><span className="typing-dot" /><span className="typing-dot" /><span className="typing-dot" /></>
+              : <>⬇️ Скачать Word (.docx)</>
+            }
+          </button>
           <button onClick={handleCopy}
-                  className={`btn-press w-full py-4 rounded-2xl font-bold text-[15px] flex items-center justify-center gap-2 shadow-elevated transition-colors ${
-                    copied ? 'bg-emerald-500 text-white' : 'bg-stone-900 text-white'
+                  className={`btn-press w-full py-3.5 rounded-2xl font-semibold text-[14px] flex items-center justify-center gap-2 shadow-card transition-colors ${
+                    copied ? 'bg-emerald-500 text-white' : 'bg-white border border-stone-200 text-stone-700'
                   }`}>
-            {copied ? <><CheckCircle className="w-5 h-5" /> Скопировано!</> : <>📋 Скопировать текст</>}
+            {copied ? <><CheckCircle className="w-4 h-4" /> Скопировано!</> : <>📋 Скопировать текст</>}
           </button>
           <button onClick={onNew}
-                  className="btn-press w-full bg-white border border-stone-200 text-stone-700 py-4 rounded-2xl font-semibold text-[14px] shadow-card">
+                  className="btn-press w-full bg-white border border-stone-200 text-stone-500 py-3.5 rounded-2xl font-medium text-[14px] shadow-card">
             Создать другой документ
           </button>
         </div>
@@ -1501,6 +1635,9 @@ export default function App() {
       {screen === 'documents-result' && generatedDoc && (
         <DocumentResultScreen
           document={generatedDoc}
+          templateId={generatedDoc._templateId}
+          fields={generatedDoc._fields}
+          initData={generatedDoc._initData}
           onBack={() => setScreen('documents-form')}
           onNew={() => { setGeneratedDoc(null); setDocTemplate(null); setScreen('documents-list'); }}
         />
