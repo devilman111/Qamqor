@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 
 import { AGENTS } from '../lib/agents';
-import { initTelegram, getInitData, getTelegramUser, hapticFeedback, closeApp } from '../lib/telegram';
+import { initTelegram, getInitData, getTelegramUser, getTelegramWebApp, hapticFeedback, closeApp } from '../lib/telegram';
 
 // Иконки маппинг (т.к. конфиг отдельно)
 const ICONS = { Stethoscope, Scale, Wallet };
@@ -37,13 +37,16 @@ function loadData(key, defaultValue = null) {
 // ============================================================
 // API ВЫЗОВЫ
 // ============================================================
-async function callAI(agentId, history, userMessage, telegramId) {
+async function callAI(agentId, userMessage) {
   try {
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ agentId, history, message: userMessage, telegramId })
+      body: JSON.stringify({ agentId, message: userMessage, initData: getInitData() })
     });
+    if (res.status === 401) {
+      return { reply: 'Сессия истекла. Перезапустите приложение через Telegram.', sources: [] };
+    }
     if (res.status === 429) {
       const data = await res.json();
       return { reply: `⏱ ${data.message || 'Слишком много запросов. Попробуйте позже.'}`, sources: [] };
@@ -51,9 +54,43 @@ async function callAI(agentId, history, userMessage, telegramId) {
     if (!res.ok) throw new Error('API error');
     const data = await res.json();
     return { reply: data.reply, sources: data.sources || [] };
-  } catch (error) {
+  } catch {
     return { reply: 'Извините, не удалось получить ответ. Проверьте интернет и попробуйте ещё раз.', sources: [] };
   }
+}
+
+async function fetchHistory(agentId) {
+  try {
+    const res = await fetch('/api/user/history', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agentId, initData: getInitData() })
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.history || [];
+  } catch { return []; }
+}
+
+async function clearHistory(agentId) {
+  try {
+    await fetch('/api/user/history', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agentId, initData: getInitData() })
+    });
+  } catch {}
+}
+
+async function deleteAllUserData() {
+  try {
+    const res = await fetch('/api/user/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ initData: getInitData(), confirmation: 'DELETE_MY_DATA' })
+    });
+    return res.ok;
+  } catch { return false; }
 }
 
 async function trackAnalytics(event, data = {}) {
@@ -225,7 +262,7 @@ function StatCard({ label, value, icon: Icon, color, sublabel }) {
   );
 }
 
-function HomeScreen({ user, streak, healthScore, financeScore, onSelectAgent, onOpenCheckin, onOpenProfile, onOpenSubscription, daysLeftInTrial }) {
+function HomeScreen({ user, streak, healthScore, financeScore, onSelectAgent, onOpenCheckin, onOpenProfile, onOpenSubscription, onOpenDocuments, daysLeftInTrial }) {
   const hour = new Date().getHours();
   const greeting = hour < 6 ? 'Доброй ночи' : hour < 12 ? 'Доброе утро' : hour < 18 ? 'Добрый день' : 'Добрый вечер';
 
@@ -300,6 +337,22 @@ function HomeScreen({ user, streak, healthScore, financeScore, onSelectAgent, on
       </div>
 
       <div className="px-4 mt-6 animate-slide-up">
+        <button
+          onClick={() => { hapticFeedback('medium'); onOpenDocuments(); }}
+          className="btn-press w-full bg-white rounded-2xl p-4 border border-stone-100 flex items-center gap-4 text-left shadow-sm"
+        >
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-slate-600 to-slate-800 flex items-center justify-center shadow-md flex-shrink-0">
+            <FileText className="w-7 h-7 text-white" strokeWidth={1.5} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="font-semibold text-stone-900 mb-1">Создать документ</div>
+            <div className="text-xs text-stone-500 leading-relaxed">Договоры, заявления, расписки, доверенности</div>
+          </div>
+          <ChevronRight className="w-5 h-5 text-stone-300 flex-shrink-0" />
+        </button>
+      </div>
+
+      <div className="px-4 mt-4 animate-slide-up">
         <div className="relative overflow-hidden bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 rounded-2xl p-5 text-white shadow-lg">
           <div className="absolute -top-8 -right-8 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
           <div className="relative">
@@ -483,7 +536,7 @@ function AgentChat({ agent, messages, onSend, onBack, loading }) {
   );
 }
 
-function ProfileScreen({ user, onBack, onLogout, onOpenSubscription, daysLeftInTrial, totalChats, totalCheckins }) {
+function ProfileScreen({ user, onBack, onLogout, onOpenSubscription, daysLeftInTrial, totalChats, totalCheckins, onDeleteAccount }) {
   return (
     <div className="min-h-screen bg-stone-50 pb-24">
       <div className="bg-gradient-to-br from-stone-900 to-stone-700 text-white px-4 pt-8 pb-12 rounded-b-3xl">
@@ -544,10 +597,23 @@ function ProfileScreen({ user, onBack, onLogout, onOpenSubscription, daysLeftInT
             );
           })}
         </div>
-        <button onClick={onLogout} className="w-full bg-white border border-rose-200 text-rose-600 py-3.5 rounded-2xl font-medium text-sm flex items-center justify-center gap-2">
+        <button onClick={onLogout} className="w-full bg-white border border-stone-200 text-stone-700 py-3.5 rounded-2xl font-medium text-sm flex items-center justify-center gap-2 mb-3">
           <LogOut className="w-4 h-4" />
           Выйти из аккаунта
         </button>
+        <button
+          onClick={() => {
+            if (confirm('Удалить ВСЕ ваши данные? История чатов, профиль, чек-ины — всё будет безвозвратно стёрто.')) {
+              onDeleteAccount();
+            }
+          }}
+          className="w-full bg-white border border-rose-200 text-rose-600 py-3.5 rounded-2xl font-medium text-sm flex items-center justify-center gap-2"
+        >
+          🗑 Удалить все мои данные
+        </button>
+        <p className="text-[10px] text-stone-400 text-center mt-3 leading-relaxed">
+          В соответствии с правом на забвение мы безвозвратно удалим: профиль, историю чатов со всеми агентами, чек-ины и статистику. Это действие нельзя отменить.
+        </p>
       </div>
     </div>
   );
@@ -615,6 +681,260 @@ function SubscriptionScreen({ onBack, onSubscribe, daysLeftInTrial }) {
   );
 }
 
+function DocumentsListScreen({ onBack, onSelectTemplate }) {
+  const [data, setData] = useState({ categories: {}, templates: [] });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/documents/list')
+      .then(r => r.json())
+      .then(d => { setData(d); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
+  const grouped = {};
+  for (const t of (data.templates || [])) {
+    if (!grouped[t.category]) grouped[t.category] = [];
+    grouped[t.category].push(t);
+  }
+
+  return (
+    <div className="min-h-screen bg-stone-50 pb-8">
+      <div className="bg-gradient-to-br from-slate-700 to-slate-900 text-white px-4 pt-8 pb-8 rounded-b-3xl">
+        <button onClick={onBack} className="w-9 h-9 bg-white/20 rounded-full flex items-center justify-center mb-4">
+          <ChevronLeft className="w-5 h-5" />
+        </button>
+        <FileText className="w-10 h-10 mb-3" strokeWidth={1.5} />
+        <h2 className="text-2xl font-bold mb-1 tracking-tight">Документы</h2>
+        <p className="text-white/80 text-sm">Готовые шаблоны договоров, заявлений и расписок</p>
+      </div>
+
+      <div className="px-4 -mt-4">
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex gap-2 mb-4">
+          <AlertCircle className="w-4 h-4 text-amber-700 flex-shrink-0 mt-0.5" />
+          <p className="text-xs text-amber-900 leading-relaxed">
+            Шаблоны — образцы. Для важных сделок проконсультируйтесь с юристом.
+          </p>
+        </div>
+
+        {loading ? (
+          <div className="flex justify-center py-12">
+            <Loader2 className="w-6 h-6 animate-spin text-stone-400" />
+          </div>
+        ) : Object.entries(grouped).map(([catId, items]) => {
+          const cat = data.categories[catId];
+          if (!cat || items.length === 0) return null;
+          return (
+            <div key={catId} className="mb-5">
+              <h3 className="text-sm font-semibold text-stone-500 uppercase tracking-wider mb-2 px-2">
+                {cat.icon} {cat.label}
+              </h3>
+              <div className="space-y-2">
+                {items.map(t => (
+                  <button
+                    key={t.id}
+                    onClick={() => { hapticFeedback('light'); onSelectTemplate(t); }}
+                    className="btn-press w-full bg-white rounded-2xl p-4 border border-stone-100 text-left shadow-sm"
+                  >
+                    <div className="font-semibold text-stone-900 mb-1">{t.title}</div>
+                    <div className="text-xs text-stone-500 leading-relaxed">{t.description}</div>
+                    <div className="text-[10px] text-stone-400 mt-2 flex items-center gap-1">
+                      <FileText className="w-3 h-3" />
+                      {t.fields.length} {t.fields.length === 1 ? 'поле' : t.fields.length < 5 ? 'поля' : 'полей'}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function DocumentFormScreen({ template, onBack, onGenerated }) {
+  const [values, setValues] = useState(() => {
+    const init = {};
+    for (const f of template.fields) {
+      if (f.default !== undefined) init[f.name] = f.default;
+    }
+    return init;
+  });
+  const [generating, setGenerating] = useState(false);
+  const [error, setError] = useState(null);
+
+  const handleSubmit = async () => {
+    setGenerating(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/documents/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          templateId: template.id,
+          fields: values,
+          initData: getInitData()
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.message || 'Ошибка генерации');
+        setGenerating(false);
+        return;
+      }
+      onGenerated(data);
+    } catch (e) {
+      setError('Не удалось сгенерировать документ');
+      setGenerating(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-stone-50 pb-8">
+      <div className="bg-gradient-to-br from-slate-700 to-slate-900 text-white px-4 pt-8 pb-6 rounded-b-3xl">
+        <button onClick={onBack} className="w-9 h-9 bg-white/20 rounded-full flex items-center justify-center mb-4">
+          <ChevronLeft className="w-5 h-5" />
+        </button>
+        <h2 className="text-xl font-bold mb-1 tracking-tight">{template.title}</h2>
+        <p className="text-white/70 text-xs leading-relaxed">{template.description}</p>
+      </div>
+
+      <div className="px-4 -mt-2">
+        {template.legalNotes && (
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-4 mt-4">
+            <p className="text-xs text-blue-900 leading-relaxed">
+              <strong>📖 Правовая основа:</strong> {template.legalNotes}
+            </p>
+          </div>
+        )}
+
+        <div className="bg-white rounded-2xl p-4 border border-stone-100 mb-4 mt-2">
+          <div className="space-y-3">
+            {template.fields.map(field => (
+              <div key={field.name}>
+                <label className="text-xs font-medium text-stone-700 mb-1 block">
+                  {field.label}
+                  {field.required && <span className="text-rose-500 ml-1">*</span>}
+                </label>
+                {field.type === 'textarea' ? (
+                  <textarea
+                    value={values[field.name] || ''}
+                    onChange={(e) => setValues({...values, [field.name]: e.target.value})}
+                    placeholder={field.placeholder || ''}
+                    rows={3}
+                    className="w-full px-3 py-2 text-sm border border-stone-200 rounded-xl focus:border-stone-900 focus:outline-none resize-none"
+                  />
+                ) : (
+                  <input
+                    type={field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : 'text'}
+                    value={values[field.name] || ''}
+                    onChange={(e) => setValues({...values, [field.name]: e.target.value})}
+                    placeholder={field.placeholder || ''}
+                    className="w-full px-3 py-2 text-sm border border-stone-200 rounded-xl focus:border-stone-900 focus:outline-none"
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {error && (
+          <div className="bg-rose-50 border border-rose-200 rounded-xl p-3 mb-3 flex gap-2">
+            <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-rose-700">{error}</p>
+          </div>
+        )}
+
+        <button
+          onClick={handleSubmit}
+          disabled={generating}
+          className="btn-press w-full bg-stone-900 text-white py-4 rounded-2xl font-semibold flex items-center justify-center gap-2"
+        >
+          {generating ? (
+            <><Loader2 className="w-5 h-5 animate-spin" /> Создаю документ...</>
+          ) : (
+            <>📄 Сгенерировать документ</>
+          )}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function DocumentResultScreen({ document, onBack, onNew }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    try {
+      // navigator.clipboard может не работать в Telegram WebView на старых девайсах
+      const textarea = window.document.createElement('textarea');
+      textarea.value = document.document;
+      window.document.body.appendChild(textarea);
+      textarea.select();
+      window.document.execCommand('copy');
+      window.document.body.removeChild(textarea);
+      setCopied(true);
+      hapticFeedback('success');
+      setTimeout(() => setCopied(false), 2000);
+    } catch (e) {
+      navigator.clipboard?.writeText(document.document);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const handleShare = () => {
+    const tg = getTelegramWebApp?.();
+    if (tg?.openLink) {
+      const text = encodeURIComponent(document.document.substring(0, 200) + '...');
+      tg.openLink(`https://t.me/share/url?text=${text}`);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-stone-50 pb-8">
+      <div className="bg-gradient-to-br from-emerald-600 to-teal-700 text-white px-4 pt-8 pb-6 rounded-b-3xl">
+        <button onClick={onBack} className="w-9 h-9 bg-white/20 rounded-full flex items-center justify-center mb-4">
+          <ChevronLeft className="w-5 h-5" />
+        </button>
+        <CheckCircle className="w-10 h-10 mb-3" strokeWidth={1.5} />
+        <h2 className="text-xl font-bold mb-1 tracking-tight">{document.title}</h2>
+        <p className="text-white/80 text-xs">Документ готов</p>
+      </div>
+
+      <div className="px-4 mt-4">
+        <div className="bg-white rounded-2xl p-4 border border-stone-100 mb-4">
+          <pre className="text-xs text-stone-800 whitespace-pre-wrap font-mono leading-relaxed overflow-x-auto">
+{document.document}
+          </pre>
+        </div>
+
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4">
+          <p className="text-xs text-amber-900 leading-relaxed">
+            <strong>⚠️ Важно:</strong> Перед использованием внимательно проверьте все данные. При необходимости — заверьте у нотариуса. По сложным сделкам — проконсультируйтесь с юристом.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <button
+            onClick={handleCopy}
+            className="btn-press w-full bg-stone-900 text-white py-4 rounded-2xl font-semibold flex items-center justify-center gap-2"
+          >
+            {copied ? <><CheckCircle className="w-5 h-5" /> Скопировано!</> : <>📋 Скопировать текст</>}
+          </button>
+          <button
+            onClick={onNew}
+            className="btn-press w-full bg-white border border-stone-200 text-stone-700 py-3 rounded-2xl font-medium text-sm"
+          >
+            Создать другой документ
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function BottomNav({ screen, onChange }) {
   if (!['home', 'profile'].includes(screen)) return null;
   return (
@@ -638,6 +958,8 @@ export default function App() {
   const [screen, setScreen] = useState('loading');
   const [user, setUser] = useState(null);
   const [currentAgentId, setCurrentAgentId] = useState(null);
+  const [docTemplate, setDocTemplate] = useState(null);
+  const [generatedDoc, setGeneratedDoc] = useState(null);
   const [allMessages, setAllMessages] = useState({ doctor: [], lawyer: [], financier: [] });
   const [streak, setStreak] = useState(0);
   const [lastCheckin, setLastCheckin] = useState(null);
@@ -701,7 +1023,7 @@ export default function App() {
     setAllMessages(updated);
     setLoading(true);
 
-    const { reply, sources } = await callAI(currentAgentId, allMessages[currentAgentId], text, user?.telegramId);
+    const { reply, sources } = await callAI(currentAgentId, text);
     const newAiMsg = {
       role: 'assistant',
       content: reply,
@@ -710,8 +1032,35 @@ export default function App() {
     };
     const final = { ...updated, [currentAgentId]: [...updated[currentAgentId], newAiMsg] };
     setAllMessages(final);
-    saveData('messages', final);
     setLoading(false);
+  };
+
+  const handleSelectAgent = async (id) => {
+    trackAnalytics('agent_open', { agent: id });
+    setCurrentAgentId(id);
+    setScreen('chat');
+    // Загружаем зашифрованную историю с сервера
+    const history = await fetchHistory(id);
+    setAllMessages(prev => ({ ...prev, [id]: history }));
+  };
+
+  const handleClearHistory = async () => {
+    if (!currentAgentId) return;
+    await clearHistory(currentAgentId);
+    setAllMessages(prev => ({ ...prev, [currentAgentId]: [] }));
+  };
+
+  const handleDeleteAccount = async () => {
+    const ok = await deleteAllUserData();
+    if (ok) {
+      setUser(null);
+      setAllMessages({ doctor: [], lawyer: [], financier: [] });
+      setStreak(0);
+      try { localStorage.clear(); } catch {}
+      setScreen('onboarding');
+    } else {
+      alert('Не удалось удалить данные. Попробуйте ещё раз.');
+    }
   };
 
   const handleCheckin = (data) => {
@@ -741,12 +1090,6 @@ export default function App() {
     setScreen('home');
   };
 
-  const handleSelectAgent = (id) => {
-    trackAnalytics('agent_open', { agent: id });
-    setCurrentAgentId(id);
-    setScreen('chat');
-  };
-
   if (screen === 'loading') {
     return (
       <div className="min-h-screen bg-stone-50 flex items-center justify-center">
@@ -766,7 +1109,31 @@ export default function App() {
           onOpenCheckin={() => setShowCheckin(true)}
           onOpenProfile={() => setScreen('profile')}
           onOpenSubscription={() => setScreen('subscription')}
+          onOpenDocuments={() => setScreen('documents-list')}
           daysLeftInTrial={daysLeftInTrial} />
+      )}
+
+      {screen === 'documents-list' && (
+        <DocumentsListScreen
+          onBack={() => setScreen('home')}
+          onSelectTemplate={(t) => { setDocTemplate(t); setScreen('documents-form'); }}
+        />
+      )}
+
+      {screen === 'documents-form' && docTemplate && (
+        <DocumentFormScreen
+          template={docTemplate}
+          onBack={() => setScreen('documents-list')}
+          onGenerated={(doc) => { setGeneratedDoc(doc); setScreen('documents-result'); }}
+        />
+      )}
+
+      {screen === 'documents-result' && generatedDoc && (
+        <DocumentResultScreen
+          document={generatedDoc}
+          onBack={() => setScreen('documents-form')}
+          onNew={() => { setGeneratedDoc(null); setDocTemplate(null); setScreen('documents-list'); }}
+        />
       )}
       {screen === 'chat' && currentAgentId && (
         <AgentChat agent={AGENTS[currentAgentId]} messages={allMessages[currentAgentId]}
@@ -775,7 +1142,8 @@ export default function App() {
       {screen === 'profile' && (
         <ProfileScreen user={user} onBack={() => setScreen('home')} onLogout={handleLogout}
           onOpenSubscription={() => setScreen('subscription')}
-          daysLeftInTrial={daysLeftInTrial} totalChats={totalChats} totalCheckins={totalCheckins} />
+          daysLeftInTrial={daysLeftInTrial} totalChats={totalChats} totalCheckins={totalCheckins}
+          onDeleteAccount={handleDeleteAccount} />
       )}
       {screen === 'subscription' && (
         <SubscriptionScreen onBack={() => setScreen(user.subscription === 'trial' ? 'home' : 'profile')}

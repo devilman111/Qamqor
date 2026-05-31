@@ -1,8 +1,14 @@
-// /api/chat — прокси к Gemini с rate limit, аналитикой и RAG для юриста
+// /api/chat — Gemini + rate limit + RAG для юриста + серверная история (шифрованная)
 import { NextResponse } from 'next/server';
 import { checkRateLimit } from '../../../lib/ratelimit';
 import { trackEvent } from '../../../lib/analytics';
 import { retrieveLegalContext, formatChunksForPrompt } from '../../../lib/legal-rag';
+import {
+  verifyTelegramInitData,
+  getChatHistory,
+  appendChatMessages,
+  upsertUserProfile
+} from '../../../lib/user-data';
 
 const SYSTEM_PROMPTS = {
   doctor: `Ты — Аружан, медицинский AI-ассистент в приложении Qamqor для граждан Казахстана.
@@ -37,18 +43,16 @@ const SYSTEM_PROMPTS = {
 - Ниже в каждом запросе тебе будут переданы РЕЛЕВАНТНЫЕ ИЗВЛЕЧЁННЫЕ нормы из законов РК
 - Используй ТОЛЬКО эту информацию как фактическую базу
 - ВСЕГДА ссылайся на конкретные источники: "Согласно [Источник 1]..." или "По статье X Трудового кодекса РК..."
-- Если в источниках нет ответа на вопрос — честно скажи "В моей базе нет точной нормы по этому вопросу, рекомендую обратиться к юристу или проверить на adilet.zan.kz"
-- НЕ выдумывай статьи и номера
+- Если в источниках нет ответа — честно скажи "В моей базе нет точной нормы, проверьте на adilet.zan.kz"
+- НЕ выдумывай статьи
 
 КРИТИЧЕСКИЕ ОГРАНИЧЕНИЯ:
 - Это ИНФОРМАЦИОННАЯ СПРАВКА, не юридическое заключение
-- Не представляешь интересы в суде
 - Для сложных вопросов — направляй к юристу
 
 СТИЛЬ:
-- Чёткий, структурированный (если уместно — маркированный список)
-- Цитируй конкретные статьи кодексов из переданных источников
-- Указывай практические шаги
+- Чёткий, структурированный
+- Цитируй конкретные статьи из переданных источников
 - В конце ответа — пометка "Это информационная справка. Для важных решений — к юристу."`,
 
   financier: `Ты — Ержан, финансовый AI-ассистент в приложении Qamqor для граждан Казахстана.
@@ -58,38 +62,69 @@ const SYSTEM_PROMPTS = {
 - Объясняешь налоги для ИП и физлиц в РК
 - Рассказываешь про депозиты, накопления
 - Объясняешь финансовые инструменты
-- Учишь финансовой грамотности
 
-ВАЖНЫЕ ПАРАМЕТРЫ РК (актуально на 2026):
+ВАЖНЫЕ ПАРАМЕТРЫ РК (2026):
 - Валюта: тенге (KZT, ₸)
-- ИПН для физлиц: 10%
-- НДС: 12%
-- ОПВ (пенсионные): 10%
-- ОСМС (медстрах): 2%
+- ИПН для физлиц: 10%, НДС: 12%, ОПВ: 10%, ОСМС: 2%
 - ИП по упрощёнке: 3% от оборота
-- МЗП 2026: примерно 85 000 ₸
+- МЗП 2026: ~85 000 ₸
 - Банки: Halyk, Kaspi, Forte, Jusan, Freedom
 
 КРИТИЧЕСКИЕ ОГРАНИЧЕНИЯ:
-- НЕ давай инвестиционных рекомендаций ("купи акцию X")
+- НЕ давай инвестиционных рекомендаций
 - Только ОБРАЗОВАТЕЛЬНАЯ информация
-- Не гарантируй доходность
 - Учитывай реалии Казахстана
 
 СТИЛЬ:
 - Конкретные цифры в тенге
-- Структурированные расчёты
-- Правило 50/30/20 при планировании бюджета
+- Правило 50/30/20
 - В конце ответа — напоминание что это образовательная информация`
 };
 
 export async function POST(request) {
   try {
-    const { agentId, history, message, telegramId } = await request.json();
+    const { agentId, message, initData } = await request.json();
 
-    let systemPrompt = SYSTEM_PROMPTS[agentId];
+    const systemPrompt = SYSTEM_PROMPTS[agentId];
     if (!systemPrompt) {
       return NextResponse.json({ error: 'Unknown agent' }, { status: 400 });
+    }
+
+    // 1. АВТОРИЗАЦИЯ — проверка Telegram HMAC
+    const user = verifyTelegramInitData(initData, process.env.TELEGRAM_BOT_TOKEN);
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Создаём/обновляем профиль (на случай первого визита)
+    await upsertUserProfile(user.id, {
+      firstName: user.first_name || '',
+      lastName: user.last_name || '',
+      username: user.username || ''
+    });
+
+    // 2. RATE LIMIT
+    const rl = await checkRateLimit(user.id, 'trial');
+    if (!rl.allowed) {
+      return NextResponse.json({
+        error: 'rate_limit',
+        message: rl.message,
+        retryAfter: rl.retryAfter
+      }, { status: 429 });
+    }
+
+    // 3. ЗАГРУЗКА ИСТОРИИ с сервера (зашифрованной)
+    const history = await getChatHistory(user.id, agentId);
+
+    // 4. RAG для юриста
+    let augmentedPrompt = systemPrompt;
+    let retrievedSources = [];
+    if (agentId === 'lawyer') {
+      const { chunks } = await retrieveLegalContext(message, 4);
+      if (chunks.length > 0) {
+        retrievedSources = chunks;
+        augmentedPrompt += `\n\nРЕЛЕВАНТНЫЕ НОРМЫ ИЗ ЗАКОНОВ РК:\n\n${formatChunksForPrompt(chunks)}`;
+      }
     }
 
     const apiKey = process.env.GOOGLE_AI_API_KEY;
@@ -97,66 +132,41 @@ export async function POST(request) {
       return NextResponse.json({ error: 'API key not configured' }, { status: 500 });
     }
 
-    // 1. RATE LIMIT
-    if (telegramId) {
-      const rl = await checkRateLimit(telegramId, 'trial');
-      if (!rl.allowed) {
-        return NextResponse.json({
-          error: 'rate_limit',
-          message: rl.message,
-          retryAfter: rl.retryAfter
-        }, { status: 429 });
-      }
-    }
-
-    // 2. RAG для юриста — подмешиваем релевантные нормы законов
-    let retrievedSources = [];
-    if (agentId === 'lawyer') {
-      const { chunks, status } = await retrieveLegalContext(message, 4);
-      if (chunks.length > 0) {
-        retrievedSources = chunks;
-        systemPrompt += `\n\nРЕЛЕВАНТНЫЕ НОРМЫ ИЗ ЗАКОНОВ РК (используй ТОЛЬКО эту информацию):\n\n${formatChunksForPrompt(chunks)}`;
-      } else if (status === 'not_seeded') {
-        // База ещё не проинициализирована — мягко предупреждаем
-        systemPrompt += `\n\n[ВНИМАНИЕ: база знаний ещё не загружена. Отвечай только общими принципами и направляй к юристу.]`;
-      }
-    }
-
-    // 3. Конвертируем историю в формат Gemini
-    const contents = [];
-    for (const msg of history || []) {
-      contents.push({
-        role: msg.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: msg.content }]
-      });
-    }
+    // 5. Формируем запрос к Gemini
+    const contents = history.map(m => ({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: m.content }]
+    }));
     contents.push({ role: 'user', parts: [{ text: message }] });
 
-    // 4. Запрос к Gemini
     const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
     const geminiResponse = await fetch(geminiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents,
-        systemInstruction: { parts: [{ text: systemPrompt }] },
+        systemInstruction: { parts: [{ text: augmentedPrompt }] },
         generationConfig: { temperature: 0.7, maxOutputTokens: 1200 }
       })
     });
 
     if (!geminiResponse.ok) {
-      const errorText = await geminiResponse.text();
-      console.error('Gemini error:', errorText);
       return NextResponse.json({ error: 'AI service error' }, { status: 500 });
     }
 
     const data = await geminiResponse.json();
-    const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Извините, не удалось получить ответ.';
+    const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Не удалось получить ответ.';
 
-    // 5. Аналитика
-    trackEvent('chat_message', { userId: telegramId, agent: agentId }).catch(() => {});
+    // 6. СОХРАНЯЕМ в зашифрованную историю (сообщение + ответ)
+    const now = new Date().toISOString();
+    await appendChatMessages(user.id, agentId, [
+      { role: 'user', content: message, time: now },
+      { role: 'assistant', content: reply, time: now, sources: retrievedSources }
+    ]);
 
-    // 6. Возвращаем ответ + источники (для лоера показываем их в UI)
+    // 7. Аналитика (без содержимого сообщения — privacy)
+    trackEvent('chat_message', { userId: user.id, agent: agentId }).catch(() => {});
+
     return NextResponse.json({
       reply,
       sources: retrievedSources.map(s => ({
@@ -166,7 +176,7 @@ export async function POST(request) {
       }))
     });
   } catch (error) {
-    console.error('Chat error:', error);
+    console.error('Chat error:', error.message);  // НЕ логируем содержимое
     return NextResponse.json({ error: 'Internal error' }, { status: 500 });
   }
 }
