@@ -373,62 +373,76 @@ function StatCard({ label, value, max = 100, icon: Icon, gradient, glow }) {
 /* ============================================================
    HOME SCREEN
    ============================================================ */
-function HomeScreen({ user, streak, healthScore, financeScore, onSelectAgent, onOpenCheckin, onOpenProfile, onOpenSubscription, onOpenDocuments, daysLeftInTrial }) {
+function HomeScreen({ user, streak, healthScore, financeScore, onSelectAgent, onOpenCheckin, onOpenProfile, onOpenSubscription, onOpenDocuments, onOpenLegalBrowser, onOpenLegalNews, daysLeftInTrial }) {
   const h = new Date().getHours();
   const greeting = h < 6 ? 'Доброй ночи' : h < 12 ? 'Доброе утро' : h < 18 ? 'Добрый день' : 'Добрый вечер';
   const firstName = user.name.split(' ')[0];
 
   return (
-    <div className="min-h-screen pb-28 mesh-bg">
+    <div className="min-h-screen pb-32 mesh-bg">
       {/* ── HERO HEADER ── */}
-      <div className="relative bg-stone-950 overflow-hidden px-5 pt-14 pb-10 rounded-b-[32px]">
-        {/* Background glows */}
-        <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute -top-32 -right-16 w-80 h-80 rounded-full blur-[90px]"
-               style={{ background: 'rgba(99,102,241,0.22)' }} />
-          <div className="absolute -bottom-16 -left-8 w-64 h-64 rounded-full blur-[80px]"
-               style={{ background: 'rgba(168,85,247,0.15)' }} />
+      <div className="relative overflow-hidden rounded-b-[36px]"
+           style={{ background: 'linear-gradient(160deg, #09090b 0%, #18181b 40%, #1c1427 80%, #0f0a1e 100%)' }}>
+        {/* Animated gradient orbs */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          <div className="absolute -top-24 -right-12 w-72 h-72 rounded-full blur-[80px] animate-spin-slow"
+               style={{ background: 'conic-gradient(from 0deg, rgba(99,102,241,0.3), rgba(168,85,247,0.2), rgba(99,102,241,0.3))' }} />
+          <div className="absolute -bottom-20 -left-12 w-56 h-56 rounded-full blur-[70px]"
+               style={{ background: 'rgba(168,85,247,0.18)' }} />
+          <div className="absolute top-1/2 left-1/3 w-32 h-32 rounded-full blur-[50px]"
+               style={{ background: 'rgba(236,72,153,0.12)' }} />
         </div>
 
-        {/* Top row */}
-        <div className="relative flex items-center justify-between mb-6 animate-fade-in">
-          <div>
-            <p className="text-stone-500 text-[13px] font-medium">{greeting},</p>
-            <h1 className="text-[28px] font-black text-white tracking-tight leading-tight mt-0.5">
-              {firstName} 👋
-            </h1>
-          </div>
-          <button onClick={onOpenProfile}
-                  className="btn-press w-12 h-12 rounded-2xl bg-white/10 border border-white/15 flex items-center justify-center">
-            <span className="text-white font-bold text-lg">{user.name[0]?.toUpperCase()}</span>
-          </button>
-        </div>
+        {/* Grid pattern overlay */}
+        <div className="absolute inset-0 opacity-[0.025]"
+             style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)', backgroundSize: '32px 32px' }} />
 
-        {/* Trial / premium badge */}
-        {user.subscription === 'trial' && (
-          <button onClick={onOpenSubscription}
-                  className="btn-press relative flex items-center justify-between w-full bg-amber-400/15 border border-amber-400/25 rounded-2xl px-4 py-3 animate-slide-up">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 bg-amber-400 rounded-xl flex items-center justify-center">
-                <Crown className="w-4 h-4 text-stone-900" />
-              </div>
-              <div>
-                <span className="text-amber-200 text-[13px] font-semibold">Пробный период</span>
-                <span className="text-amber-400/80 text-[11px] ml-2">· {daysLeftInTrial} дн. осталось</span>
-              </div>
+        <div className="relative px-5 pt-14 pb-8">
+          {/* Top row */}
+          <div className="flex items-center justify-between mb-5 animate-fade-in">
+            <div>
+              <p className="text-stone-500 text-[12px] font-semibold uppercase tracking-widest">{greeting}</p>
+              <h1 className="text-[30px] font-black text-white tracking-tight leading-tight mt-0.5">
+                {firstName} <span className="animate-float inline-block">👋</span>
+              </h1>
             </div>
-            <div className="flex items-center gap-1 bg-amber-400 rounded-xl px-3 py-1">
-              <Zap className="w-3 h-3 text-stone-900" />
-              <span className="text-stone-900 text-[11px] font-bold">Premium</span>
-            </div>
-          </button>
-        )}
-        {user.subscription === 'premium' && (
-          <div className="flex items-center gap-2 bg-emerald-500/15 border border-emerald-500/25 rounded-2xl px-4 py-3">
-            <CheckCircle className="w-5 h-5 text-emerald-400" />
-            <span className="text-emerald-300 text-[13px] font-semibold">Premium активен</span>
+            <button onClick={onOpenProfile}
+                    className="btn-press relative w-12 h-12 rounded-2xl bg-white/10 border border-white/15 flex items-center justify-center overflow-hidden">
+              {/* Avatar gradient bg */}
+              <div className="absolute inset-0 bg-gradient-to-br from-violet-500/30 to-indigo-600/30" />
+              <span className="relative text-white font-black text-lg">{user.name[0]?.toUpperCase()}</span>
+            </button>
           </div>
-        )}
+
+          {/* Trial / premium badge */}
+          {user.subscription === 'trial' && (
+            <button onClick={onOpenSubscription}
+                    className="btn-press relative w-full rounded-2xl px-4 py-3 mb-0 animate-slide-up overflow-hidden border border-amber-400/20"
+                    style={{ background: 'linear-gradient(135deg, rgba(245,158,11,0.12), rgba(249,115,22,0.08))' }}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 premium-gradient rounded-xl flex items-center justify-center shadow-glow-amber">
+                    <Crown className="w-4 h-4 text-white" />
+                  </div>
+                  <div>
+                    <div className="text-amber-300 text-[13px] font-bold">Пробный период</div>
+                    <div className="text-amber-500/70 text-[11px]">{daysLeftInTrial} дней осталось</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 bg-amber-400 rounded-xl px-3 py-1.5">
+                  <Zap className="w-3 h-3 text-stone-900" />
+                  <span className="text-stone-900 text-[11px] font-black">Upgrade</span>
+                </div>
+              </div>
+            </button>
+          )}
+          {user.subscription === 'premium' && (
+            <div className="flex items-center gap-2 bg-emerald-500/12 border border-emerald-500/20 rounded-2xl px-4 py-3">
+              <div className="status-dot" />
+              <span className="text-emerald-300 text-[13px] font-bold">Premium · Полный доступ</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ── STREAK CARD ── */}
@@ -461,8 +475,11 @@ function HomeScreen({ user, streak, healthScore, financeScore, onSelectAgent, on
       {/* ── AGENTS SECTION ── */}
       <div className="px-4 mt-5">
         <div className="flex items-center justify-between mb-3 px-1">
-          <h2 className="text-[13px] font-bold text-stone-400 uppercase tracking-widest">Помощники</h2>
-          <span className="text-[11px] text-stone-400 font-medium">3 агента</span>
+          <h2 className="text-[13px] font-black text-stone-400 uppercase tracking-widest">AI Помощники</h2>
+          <div className="flex items-center gap-1.5 bg-white rounded-full px-2.5 py-1 shadow-card">
+            <div className="status-dot" style={{width:6,height:6}} />
+            <span className="text-[11px] text-stone-500 font-semibold">3 онлайн</span>
+          </div>
         </div>
         <div className="space-y-3 stagger">
           {Object.values(AGENTS).map(agent => {
@@ -470,26 +487,31 @@ function HomeScreen({ user, streak, healthScore, financeScore, onSelectAgent, on
             return (
               <button key={agent.id}
                       onClick={() => { hapticFeedback('medium'); onSelectAgent(agent.id); }}
-                      className="btn-press w-full bg-white rounded-3xl overflow-hidden shadow-card text-left group">
-                {/* Gradient top strip */}
+                      className="btn-press w-full bg-white rounded-3xl overflow-hidden shadow-card text-left group card-lift">
+                {/* Gradient top strip — thicker */}
                 <div className={`h-1.5 bg-gradient-to-r ${agent.gradient}`} />
                 <div className="p-4 flex items-center gap-4">
-                  <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${agent.gradient} flex items-center justify-center flex-shrink-0 shadow-md`}>
+                  {/* Icon with glow */}
+                  <div className={`relative w-14 h-14 rounded-2xl bg-gradient-to-br ${agent.gradient} flex items-center justify-center flex-shrink-0`}
+                       style={{ boxShadow: `0 8px 20px rgba(99,102,241,0.25)` }}>
                     <Icon className="w-7 h-7 text-white" strokeWidth={1.75} />
+                    {/* Online dot */}
+                    <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-400 rounded-full border-2 border-white" />
                   </div>
+
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <span className="font-bold text-stone-900 text-[15px]">{agent.name}</span>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${agent.softBg} ${agent.textColor} uppercase tracking-wide`}>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-black text-stone-900 text-[15px]">{agent.name}</span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-lg ${agent.softBg} ${agent.textColor} uppercase tracking-wide`}>
                         {agent.role}
                       </span>
                     </div>
-                    <p className="text-[13px] text-stone-500 leading-relaxed line-clamp-2">{agent.description}</p>
+                    <p className="text-[13px] text-stone-500 leading-snug line-clamp-2">{agent.description}</p>
                   </div>
-                  <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${agent.gradient} flex items-center justify-center flex-shrink-0 opacity-0 group-active:opacity-100 transition-opacity`}>
-                    <ChevronRight className="w-4 h-4 text-white" />
+
+                  <div className="w-9 h-9 rounded-2xl bg-stone-50 border border-stone-100 flex items-center justify-center flex-shrink-0">
+                    <ChevronRight className="w-4 h-4 text-stone-400" />
                   </div>
-                  <ChevronRight className="w-5 h-5 text-stone-300 flex-shrink-0 group-active:hidden" />
                 </div>
               </button>
             );
@@ -497,20 +519,82 @@ function HomeScreen({ user, streak, healthScore, financeScore, onSelectAgent, on
         </div>
       </div>
 
-      {/* ── DOCUMENTS SHORTCUT ── */}
+      {/* ── QUICK ACTIONS GRID ── */}
       <div className="px-4 mt-3 animate-slide-up">
-        <button onClick={() => { hapticFeedback('medium'); onOpenDocuments(); }}
-                className="btn-press w-full bg-white rounded-3xl overflow-hidden shadow-card text-left">
-          <div className="h-1.5 bg-gradient-to-r from-slate-600 to-slate-800" />
-          <div className="p-4 flex items-center gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-slate-600 to-slate-800 flex items-center justify-center flex-shrink-0 shadow-md">
-              <FileText className="w-7 h-7 text-white" strokeWidth={1.5} />
+        <div className="grid grid-cols-3 gap-2.5 mb-2.5">
+          <button onClick={() => { hapticFeedback('medium'); onOpenDocuments(); }}
+                  className="btn-press bg-white rounded-2xl overflow-hidden shadow-card text-left">
+            <div className="h-0.5 bg-gradient-to-r from-slate-600 to-slate-800" />
+            <div className="p-3 flex flex-col gap-2">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-slate-600 to-slate-800 flex items-center justify-center">
+                <FileText className="w-4.5 h-4.5 text-white" style={{width:18,height:18}} strokeWidth={1.5} />
+              </div>
+              <div>
+                <div className="font-bold text-stone-900 text-[13px] leading-tight">Документы</div>
+                <p className="text-[10px] text-stone-400 mt-0.5 leading-snug">25 шаблонов</p>
+              </div>
             </div>
+          </button>
+
+          <button onClick={() => { hapticFeedback('medium'); onOpenLegalBrowser(); }}
+                  className="btn-press bg-white rounded-2xl overflow-hidden shadow-card text-left">
+            <div className="h-0.5 bg-gradient-to-r from-indigo-600 to-violet-600" />
+            <div className="p-3 flex flex-col gap-2">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 flex items-center justify-center">
+                <BookOpen className="w-4.5 h-4.5 text-white" style={{width:18,height:18}} strokeWidth={1.5} />
+              </div>
+              <div>
+                <div className="font-bold text-stone-900 text-[13px] leading-tight">База законов</div>
+                <p className="text-[10px] text-stone-400 mt-0.5 leading-snug">300+ норм</p>
+              </div>
+            </div>
+          </button>
+
+          <button onClick={() => { hapticFeedback('medium'); onOpenLegalNews(); }}
+                  className="btn-press bg-white rounded-2xl overflow-hidden shadow-card text-left relative">
+            <div className="h-0.5 bg-gradient-to-r from-rose-500 to-red-600" />
+            {/* Live badge */}
+            <div className="absolute top-2.5 right-2.5 w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse-soft" />
+            <div className="p-3 flex flex-col gap-2">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-rose-500 to-red-600 flex items-center justify-center">
+                <Zap className="w-4.5 h-4.5 text-white" style={{width:18,height:18}} strokeWidth={2} />
+              </div>
+              <div>
+                <div className="font-bold text-stone-900 text-[13px] leading-tight">Новости</div>
+                <p className="text-[10px] text-stone-400 mt-0.5 leading-snug">Новые законы</p>
+              </div>
+            </div>
+          </button>
+        </div>
+      </div>
+
+      {/* ── FEATURED: LATEST LAW UPDATE ── */}
+      <div className="px-4 mt-3 animate-slide-up">
+        <button onClick={() => { hapticFeedback('medium'); onOpenLegalNews(); }}
+                className="btn-press w-full relative overflow-hidden rounded-3xl p-5 noise text-left"
+                style={{ background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 40%, #4c1d95 100%)' }}>
+          <div className="absolute -top-8 -right-8 w-40 h-40 rounded-full blur-3xl"
+               style={{ background: 'rgba(139,92,246,0.40)' }} />
+          <div className="absolute bottom-0 left-0 w-32 h-24 rounded-full blur-2xl"
+               style={{ background: 'rgba(99,102,241,0.25)' }} />
+          <div className="relative flex items-start justify-between gap-3">
             <div className="flex-1">
-              <div className="font-bold text-stone-900 text-[15px] mb-0.5">Документы</div>
-              <p className="text-[13px] text-stone-500">Договоры, заявления, расписки, доверенности</p>
+              <div className="flex items-center gap-2 mb-2">
+                <div className="flex items-center gap-1.5 bg-white/15 rounded-lg px-2 py-1">
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse-soft" />
+                  <span className="text-[10px] font-black text-white/90 uppercase tracking-widest">Свежие законы</span>
+                </div>
+              </div>
+              <h3 className="font-black text-white text-[16px] mb-1.5 tracking-tight">
+                МЗП 2025 = 85 000 ₸ <br/>Всеобщее декларирование — всем!
+              </h3>
+              <p className="text-white/60 text-[12px] leading-relaxed">
+                25+ изменений в законах РК за 2024–2025 →
+              </p>
             </div>
-            <ChevronRight className="w-5 h-5 text-stone-300 flex-shrink-0" />
+            <div className="w-10 h-10 bg-white/15 rounded-2xl flex items-center justify-center flex-shrink-0 mt-1">
+              <Zap className="w-5 h-5 text-white" />
+            </div>
           </div>
         </button>
       </div>
@@ -526,9 +610,11 @@ function HomeScreen({ user, streak, healthScore, financeScore, onSelectAgent, on
               </div>
               <span className="text-[11px] font-bold text-white/70 uppercase tracking-widest">Совет дня</span>
             </div>
-            <h3 className="font-black text-white text-[17px] mb-1 tracking-tight">Депозиты застрахованы</h3>
-            <p className="text-white/75 text-[13px] leading-relaxed">
-              Вклады в банках РК защищены КФГД до 20 млн ₸. Спросите Ержана о лучших депозитах.
+            <h3 className="font-black text-white text-[16px] mb-1 tracking-tight">
+              Знаете ли вы свои права как работник?
+            </h3>
+            <p className="text-white/72 text-[13px] leading-relaxed">
+              Спросите Дамира о трудовых правах: увольнение, зарплата, отпуск — ваши гарантии по ТК РК.
             </p>
           </div>
         </div>
@@ -702,6 +788,21 @@ function AgentChat({ agent, messages, onSend, onBack, loading }) {
         </div>
       </div>
 
+      {/* Lawyer: latest law news ticker */}
+      {agent.id === 'lawyer' && (
+        <div className="mx-4 mt-2 bg-gradient-to-r from-indigo-600 to-violet-600 rounded-2xl px-3 py-2 flex items-center gap-2 overflow-hidden">
+          <div className="flex-shrink-0 flex items-center gap-1.5">
+            <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse-soft" />
+            <span className="text-[10px] font-black text-white/90 uppercase tracking-widest whitespace-nowrap">Свежие законы</span>
+          </div>
+          <div className="flex-1 overflow-hidden">
+            <div className="ticker-content text-[11px] text-white/80 whitespace-nowrap">
+              🆕 МЗП 2025 = 85 000 ₸ &nbsp;·&nbsp; Всеобщее декларирование всех граждан РК с 2025 &nbsp;·&nbsp; Мошенничество в мессенджерах — новая ст. 185-1 УК &nbsp;·&nbsp; КСК → ОСИ: переход обязателен &nbsp;·&nbsp; ЭЦП теперь действует 3 года &nbsp;·&nbsp; Банкротство физлиц: лимит 4,9 млн ₸ &nbsp;·&nbsp; Скриншоты WhatsApp — допустимы в суде
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Messages */}
       <div className="flex-1 px-4 py-4 space-y-4 overflow-y-auto pb-2">
         {messages.length === 0 && (
@@ -716,28 +817,32 @@ function AgentChat({ agent, messages, onSend, onBack, loading }) {
         )}
 
         {messages.map((msg, i) => (
-          <div key={i} className={`flex flex-col gap-1.5 ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
-            <div className={`max-w-[85%] rounded-3xl px-4 py-3 ${
+          <div key={i} className={`flex flex-col gap-1.5 ${msg.role === 'user' ? 'items-end' : 'items-start'} animate-slide-up`}
+               style={{ animationDelay: `${Math.min(i * 0.04, 0.3)}s` }}>
+            <div className={`max-w-[85%] px-4 py-3 ${
               msg.role === 'user'
-                ? 'bg-stone-900 text-white rounded-br-lg'
-                : 'bg-white text-stone-900 shadow-card rounded-bl-lg'
+                ? 'chat-bubble-user'
+                : 'chat-bubble-ai'
             }`}>
               <div className="text-[14px] leading-relaxed whitespace-pre-wrap">{msg.content}</div>
-              <div className={`text-[10px] mt-1.5 ${msg.role === 'user' ? 'text-stone-400' : 'text-stone-400'}`}>
+              <div className="text-[10px] mt-1.5 opacity-50">
                 {formatTime(msg.time)}
               </div>
             </div>
 
-            {/* Sources */}
+            {/* Sources — premium styled */}
             {msg.role === 'assistant' && msg.sources && msg.sources.length > 0 && (
-              <div className="max-w-[85%] space-y-1.5">
-                <div className="text-[10px] uppercase tracking-widest font-bold text-stone-400 px-1">
-                  📚 Источники
+              <div className="max-w-[85%] space-y-1.5 animate-fade-in">
+                <div className="text-[10px] uppercase tracking-widest font-bold text-stone-400 px-1 flex items-center gap-1">
+                  <BookOpen className="w-3 h-3" /> Источники из базы законов РК
                 </div>
                 {msg.sources.map((src, idx) => (
-                  <div key={idx} className={`${agent.softBg} border ${agent.softBorder} rounded-2xl px-3 py-2`}>
-                    <div className={`text-[12px] font-bold ${agent.textColor}`}>{src.source}</div>
-                    <div className="text-[11px] text-stone-600 mt-0.5">{src.articles} · {src.topic}</div>
+                  <div key={idx} className="bg-gradient-to-r from-indigo-50 to-violet-50 border border-indigo-100 rounded-2xl px-3 py-2">
+                    <div className="text-[11px] font-black text-indigo-700 leading-snug">{src.source}</div>
+                    <div className="text-[11px] text-stone-600 mt-0.5 leading-snug">{src.articles} · {src.topic}</div>
+                    {src.score > 0 && (
+                      <div className="text-[10px] text-indigo-400 mt-0.5">релевантность: {src.score}</div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -1438,13 +1543,481 @@ function DocumentResultScreen({ document, onBack, onNew, templateId, fields, ini
 }
 
 /* ============================================================
+   LEGAL NEWS SCREEN — Kazakhstan law updates in real time
+   ============================================================ */
+const NEWS_BADGE_STYLES = {
+  red:    'bg-red-50 text-red-700 border border-red-200',
+  blue:   'bg-blue-50 text-blue-700 border border-blue-200',
+  green:  'bg-emerald-50 text-emerald-700 border border-emerald-200',
+  orange: 'bg-orange-50 text-orange-700 border border-orange-200',
+  purple: 'bg-violet-50 text-violet-700 border border-violet-200',
+  pink:   'bg-pink-50 text-pink-700 border border-pink-200',
+  teal:   'bg-teal-50 text-teal-700 border border-teal-200',
+};
+
+const NEWS_CATS = [
+  { id: 'all',       label: 'Все',        icon: '📰' },
+  { id: 'tax',       label: 'Налоги',     icon: '💰' },
+  { id: 'labor',     label: 'Труд',       icon: '👷' },
+  { id: 'criminal',  label: 'УК',         icon: '⚖️' },
+  { id: 'housing',   label: 'Жильё',      icon: '🏠' },
+  { id: 'finance',   label: 'Финансы',    icon: '🏦' },
+  { id: 'digital',   label: 'Цифровые',   icon: '💻' },
+  { id: 'business',  label: 'Бизнес',     icon: '💼' },
+  { id: 'social',    label: 'Соцзащита',  icon: '👶' },
+  { id: 'constitutional', label: 'Суды',  icon: '🏛️' },
+];
+
+function formatNewsDate(dateStr) {
+  const d = new Date(dateStr);
+  const now = new Date();
+  const diffDays = Math.floor((now - d) / 86400000);
+  if (diffDays === 0) return 'Сегодня';
+  if (diffDays === 1) return 'Вчера';
+  if (diffDays < 7)  return `${diffDays} дней назад`;
+  return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function LegalNewsScreen({ onBack }) {
+  const [news, setNews]         = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [category, setCategory] = useState('all');
+  const [expanded, setExpanded] = useState(null);
+  const catRef = useRef(null);
+
+  const fetchNews = async (cat = 'all') => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/legal/news?category=${cat}&limit=50`);
+      const d = await res.json();
+      setNews(d.news || []);
+    } catch {
+      setNews([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchNews('all'); }, []);
+
+  const handleCat = (cat) => {
+    setCategory(cat);
+    setExpanded(null);
+    fetchNews(cat);
+    hapticFeedback('light');
+  };
+
+  const highPriority = news.filter(n => n.priority === 'high');
+
+  return (
+    <div className="min-h-screen bg-[#F4F2EF] pb-10">
+      {/* ── HERO ── */}
+      <div className="relative overflow-hidden rounded-b-[36px]"
+           style={{ background: 'linear-gradient(160deg, #0f172a 0%, #1e1b4b 50%, #312e81 100%)' }}>
+        {/* Orb decorations */}
+        <div className="absolute -top-20 -right-20 w-64 h-64 rounded-full blur-[80px]"
+             style={{ background: 'rgba(99,102,241,0.35)' }} />
+        <div className="absolute -bottom-10 -left-10 w-48 h-48 rounded-full blur-[60px]"
+             style={{ background: 'rgba(168,85,247,0.25)' }} />
+
+        <div className="relative px-5 pt-14 pb-6">
+          <button onClick={onBack}
+                  className="w-10 h-10 bg-white/10 border border-white/20 rounded-2xl flex items-center justify-center mb-5 btn-press">
+            <ChevronLeft className="w-5 h-5 text-white" />
+          </button>
+
+          {/* Live indicator */}
+          <div className="flex items-center gap-2 mb-3">
+            <div className="status-dot" />
+            <span className="text-emerald-400 text-[12px] font-bold uppercase tracking-widest">
+              Обновляется в реальном времени
+            </span>
+          </div>
+
+          <h1 className="text-[28px] font-black text-white tracking-tight leading-tight mb-1">
+            Изменения законов РК
+          </h1>
+          <p className="text-white/55 text-[14px]">
+            Новые законы, поправки, решения судов
+          </p>
+
+          {/* Stat strip */}
+          <div className="flex gap-4 mt-5 pt-4 border-t border-white/10">
+            {[
+              { val: news.length || '25+', label: 'Обновлений' },
+              { val: highPriority.length || '8',  label: 'Важных' },
+              { val: '2025',               label: 'Актуально' },
+            ].map(s => (
+              <div key={s.label}>
+                <div className="text-white font-black text-[20px] leading-none">{s.val}</div>
+                <div className="text-white/45 text-[11px] font-medium mt-0.5">{s.label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Category filter */}
+        <div className="pb-5 px-5">
+          <div ref={catRef}
+               className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
+            {NEWS_CATS.map(c => (
+              <button key={c.id}
+                onClick={() => handleCat(c.id)}
+                className={`btn-press flex-shrink-0 flex items-center gap-1.5 text-[12px] font-bold px-3 py-2 rounded-2xl transition-all ${
+                  category === c.id
+                    ? 'bg-white text-indigo-700 shadow-md'
+                    : 'bg-white/12 text-white/75 border border-white/15'
+                }`}>
+                <span>{c.icon}</span>
+                <span>{c.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ── CONTENT ── */}
+      <div className="px-4 mt-4">
+        {loading ? (
+          <div className="space-y-3">
+            {[1,2,3,4].map(i => (
+              <div key={i} className="bg-white rounded-3xl p-5 shadow-card">
+                <div className="skeleton h-4 w-24 rounded-full mb-3" />
+                <div className="skeleton h-5 w-full rounded-xl mb-2" />
+                <div className="skeleton h-4 w-3/4 rounded-xl" />
+              </div>
+            ))}
+          </div>
+        ) : news.length === 0 ? (
+          <div className="text-center py-20">
+            <div className="text-5xl mb-4">📭</div>
+            <p className="text-stone-500 font-semibold">Нет новостей в этой категории</p>
+          </div>
+        ) : (
+          <div className="space-y-3 stagger">
+            {news.map((item) => {
+              const isOpen   = expanded === item.id;
+              const badgeCls = NEWS_BADGE_STYLES[item.badgeColor] || NEWS_BADGE_STYLES.blue;
+
+              return (
+                <button key={item.id}
+                        onClick={() => { setExpanded(isOpen ? null : item.id); hapticFeedback('light'); }}
+                        className={`btn-press w-full bg-white rounded-3xl p-5 text-left shadow-card border border-stone-100/80 transition-all overflow-hidden ${
+                          item.priority === 'high' ? 'priority-high' : item.priority === 'medium' ? 'priority-medium' : 'priority-low'
+                        }`}>
+
+                  {/* Top row */}
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <div className="flex flex-wrap gap-1.5">
+                      <span className={`text-[10px] font-black px-2 py-1 rounded-xl ${badgeCls}`}>
+                        {item.badge}
+                      </span>
+                      <span className="text-[10px] text-stone-400 font-medium self-center">
+                        {formatNewsDate(item.date)}
+                      </span>
+                    </div>
+                    <div className={`w-7 h-7 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 transition-all ${
+                      isOpen ? 'bg-indigo-600 rotate-180' : 'bg-stone-100'
+                    }`}>
+                      <ChevronDown className={`w-4 h-4 ${isOpen ? 'text-white' : 'text-stone-400'}`} />
+                    </div>
+                  </div>
+
+                  {/* Title */}
+                  <h3 className="font-bold text-stone-900 text-[15px] leading-snug mb-2">
+                    {item.title}
+                  </h3>
+
+                  {/* Summary always visible */}
+                  <p className={`text-[13px] text-stone-600 leading-relaxed ${isOpen ? '' : 'line-clamp-2'}`}>
+                    {item.summary}
+                  </p>
+
+                  {/* Expanded details */}
+                  {isOpen && (
+                    <div className="mt-4 pt-4 border-t border-stone-100 animate-fade-in">
+                      <p className="text-[13px] text-stone-700 leading-relaxed mb-4">
+                        {item.details}
+                      </p>
+
+                      {/* Source */}
+                      <div className="flex items-start gap-2 bg-indigo-50 rounded-2xl px-4 py-3 mb-3">
+                        <BookOpen className="w-4 h-4 text-indigo-500 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-[11px] font-bold text-indigo-700 mb-0.5">Источник</p>
+                          <p className="text-[12px] text-indigo-600">{item.source}</p>
+                        </div>
+                      </div>
+
+                      {/* Tags */}
+                      <div className="flex flex-wrap gap-1.5 mb-3">
+                        {item.tags?.map(tag => (
+                          <span key={tag}
+                                className="text-[11px] bg-stone-50 border border-stone-200 text-stone-500 px-2.5 py-1 rounded-full">
+                            #{tag}
+                          </span>
+                        ))}
+                      </div>
+
+                      {/* Adilet link */}
+                      <div className="flex items-center gap-2 text-[12px] text-stone-400">
+                        <Shield className="w-3.5 h-3.5" />
+                        <span>Проверить актуальность: <strong className="text-indigo-600">adilet.zan.kz</strong></span>
+                      </div>
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Disclaimer */}
+        <div className="mt-6 glass-card rounded-3xl p-4">
+          <div className="flex gap-3">
+            <div className="w-8 h-8 rounded-xl bg-amber-100 flex items-center justify-center flex-shrink-0">
+              <AlertCircle className="w-4 h-4 text-amber-600" />
+            </div>
+            <p className="text-[12px] text-stone-600 leading-relaxed">
+              Информация носит справочный характер. Для точных данных проверяйте первоисточники на{' '}
+              <strong className="text-indigo-600">adilet.zan.kz</strong> и{' '}
+              <strong className="text-indigo-600">parlam.kz</strong>
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   LEGAL BROWSER SCREEN — Search 400+ Kazakhstan legal norms
+   ============================================================ */
+function LegalBrowserScreen({ onBack }) {
+  const [query, setQuery]       = useState('');
+  const [results, setResults]   = useState([]);
+  const [total, setTotal]       = useState(0);
+  const [loading, setLoading]   = useState(false);
+  const [sources, setSources]   = useState([]);
+  const [srcFilter, setSrcFilter] = useState('');
+  const [page, setPage]         = useState(1);
+  const [expanded, setExpanded] = useState(null);
+  const inputRef = useRef(null);
+  const LIMIT = 12;
+
+  // Load source list once
+  useEffect(() => {
+    fetch('/api/legal/search?sources=1')
+      .then(r => r.json())
+      .then(d => setSources(d.sources || []))
+      .catch(() => {});
+    // Show all on mount
+    doSearch('', '', 1);
+  }, []); // eslint-disable-line
+
+  const doSearch = async (q, src, pg) => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/legal/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ q, source: src || null, page: pg, limit: LIMIT }),
+      });
+      const d = await res.json();
+      setResults(d.results || []);
+      setTotal(d.total || 0);
+    } catch {
+      setResults([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSearch = (q = query, src = srcFilter, pg = 1) => {
+    setPage(pg);
+    setExpanded(null);
+    doSearch(q, src, pg);
+  };
+
+  // Short source name for badge
+  const shortSource = (s) => s
+    .replace('Гражданский кодекс РК', 'ГК')
+    .replace('Трудовой кодекс РК', 'ТК')
+    .replace('Уголовный кодекс РК', 'УК')
+    .replace('Налоговый кодекс РК', 'НК')
+    .replace('Жилищный кодекс РК', 'ЖК')
+    .replace('Земельный кодекс РК', 'ЗемК')
+    .replace('Экологический кодекс РК', 'ЭкК')
+    .replace('КоАП РК', 'КоАП')
+    .replace('ГПК РК', 'ГПК')
+    .replace('УПК РК', 'УПК')
+    .replace('Кодекс О браке и семье РК', 'СемК')
+    .replace('Конституция РК', 'Конст.')
+    .replace(/Закон РК .+/, 'Закон')
+    .slice(0, 20);
+
+  const totalPages = Math.ceil(total / LIMIT);
+
+  return (
+    <div className="min-h-screen bg-[#F5F3F0] pb-10">
+      {/* Header */}
+      <div className="relative bg-gradient-to-br from-indigo-700 via-violet-700 to-purple-800 text-white px-5 pt-14 pb-8 rounded-b-[32px] overflow-hidden">
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="absolute -top-20 right-0 w-56 h-56 bg-white/10 rounded-full blur-3xl" />
+          <div className="absolute bottom-0 left-0 w-40 h-40 bg-white/5 rounded-full blur-2xl" />
+        </div>
+        <button onClick={onBack}
+                className="relative w-10 h-10 bg-white/10 border border-white/20 rounded-2xl flex items-center justify-center mb-4">
+          <ChevronLeft className="w-5 h-5 text-white" />
+        </button>
+        <div className="relative mb-5">
+          <div className="w-12 h-12 bg-white/15 rounded-2xl flex items-center justify-center mb-3 border border-white/20">
+            <BookOpen className="w-6 h-6 text-white" strokeWidth={1.5} />
+          </div>
+          <h2 className="text-[24px] font-black tracking-tight mb-0.5">База законов РК</h2>
+          <p className="text-white/65 text-[13px]">{total > 0 ? `${total} норм найдено` : '400+ норм из всех кодексов'}</p>
+        </div>
+
+        {/* Search bar */}
+        <div className="relative">
+          <input
+            ref={inputRef}
+            type="text"
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') handleSearch(query); }}
+            placeholder="Найти норму... (увольнение, алименты, ДТП...)"
+            className="w-full bg-white/15 border border-white/25 rounded-2xl px-4 py-3 pr-12 text-white placeholder-white/50 text-[14px] outline-none focus:bg-white/20 focus:border-white/40 transition-all"
+          />
+          <button onClick={() => handleSearch(query)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center">
+            <Send className="w-4 h-4 text-white" />
+          </button>
+        </div>
+      </div>
+
+      <div className="px-4 mt-4">
+        {/* Source filter */}
+        {sources.length > 0 && (
+          <div className="flex gap-2 overflow-x-auto pb-2 mb-4 scrollbar-hide">
+            <button
+              onClick={() => { setSrcFilter(''); handleSearch(query, '', 1); }}
+              className={`flex-shrink-0 text-[12px] font-semibold px-3 py-1.5 rounded-full transition-all ${
+                !srcFilter ? 'bg-stone-900 text-white' : 'bg-white border border-stone-200 text-stone-600'
+              }`}>
+              Все
+            </button>
+            {sources.map(s => (
+              <button key={s}
+                onClick={() => { setSrcFilter(s); handleSearch(query, s, 1); }}
+                className={`flex-shrink-0 text-[12px] font-semibold px-3 py-1.5 rounded-full transition-all whitespace-nowrap ${
+                  srcFilter === s ? 'bg-indigo-600 text-white' : 'bg-white border border-stone-200 text-stone-600'
+                }`}>
+                {shortSource(s)}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Results */}
+        {loading ? (
+          <div className="space-y-3">
+            {[1,2,3,4].map(i => (
+              <div key={i} className="bg-white rounded-2xl p-4 skeleton h-24" />
+            ))}
+          </div>
+        ) : results.length === 0 ? (
+          <div className="text-center py-16">
+            <div className="text-5xl mb-4">🔍</div>
+            <p className="text-stone-500 font-medium">Ничего не найдено</p>
+            <p className="text-stone-400 text-sm mt-1">Попробуйте другой запрос</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {results.map((r) => (
+              <button key={r.id}
+                      onClick={() => setExpanded(expanded === r.id ? null : r.id)}
+                      className="btn-press w-full bg-white rounded-2xl p-4 text-left shadow-card border border-stone-100 transition-all">
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <span className="text-[10px] font-bold bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full border border-indigo-100">
+                        {shortSource(r.source)}
+                      </span>
+                      <span className="text-[10px] text-stone-400">{r.articles}</span>
+                      {r.score > 0 && (
+                        <span className="text-[10px] text-emerald-600 font-medium">
+                          {Math.round(r.score * 10) / 10}★
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[14px] font-bold text-stone-900 leading-snug">{r.topic}</p>
+                  </div>
+                  <ChevronDown className={`w-4 h-4 text-stone-400 flex-shrink-0 mt-1 transition-transform ${expanded === r.id ? 'rotate-180' : ''}`} />
+                </div>
+
+                {/* Keywords preview */}
+                {!expanded || expanded !== r.id ? (
+                  <p className="text-[12px] text-stone-500 leading-relaxed line-clamp-2">
+                    {r.keywords?.split(' ').slice(0, 8).join(' · ')}
+                  </p>
+                ) : (
+                  <div className="mt-2 pt-3 border-t border-stone-100">
+                    <p className="text-[13px] text-stone-700 leading-relaxed">{r.content}</p>
+                    <div className="mt-3 flex flex-wrap gap-1">
+                      {r.keywords?.split(' ').filter(k => k.length > 2).map((k, i) => (
+                        <span key={i} className="text-[11px] bg-stone-50 border border-stone-200 text-stone-500 px-2 py-0.5 rounded-full">
+                          {k}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between mt-6">
+            <button
+              disabled={page <= 1}
+              onClick={() => handleSearch(query, srcFilter, page - 1)}
+              className="flex items-center gap-1 text-[13px] font-semibold text-stone-600 disabled:opacity-30 bg-white rounded-xl px-3 py-2 shadow-card">
+              <ChevronLeft className="w-4 h-4" /> Назад
+            </button>
+            <span className="text-[13px] text-stone-500">{page} / {totalPages}</span>
+            <button
+              disabled={page >= totalPages}
+              onClick={() => handleSearch(query, srcFilter, page + 1)}
+              className="flex items-center gap-1 text-[13px] font-semibold text-stone-600 disabled:opacity-30 bg-white rounded-xl px-3 py-2 shadow-card">
+              Вперёд <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {/* Footer note */}
+        <div className="mt-6 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3">
+          <p className="text-[11px] text-amber-800 leading-relaxed">
+            📚 База включает нормы из Трудового, Гражданского, Налогового, Уголовного, Жилищного, Земельного кодексов, КоАП, ГПК, УПК и других законов РК. Актуальность проверяйте на <strong>adilet.zan.kz</strong>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
    BOTTOM NAVIGATION
    ============================================================ */
 function BottomNav({ screen, onChange }) {
-  if (!['home', 'profile'].includes(screen)) return null;
+  if (!['home', 'profile', 'legal-browser', 'legal-news'].includes(screen)) return null;
   const items = [
-    { id: 'home', icon: Home, label: 'Главная' },
-    { id: 'profile', icon: User, label: 'Профиль' },
+    { id: 'home',          icon: Home,    label: 'Главная' },
+    { id: 'legal-browser', icon: BookOpen, label: 'Законы' },
+    { id: 'legal-news',    icon: Zap,     label: 'Новости' },
+    { id: 'profile',       icon: User,    label: 'Профиль' },
   ];
   return (
     <div className="fixed bottom-0 left-0 right-0 z-40 flex justify-center pb-6 px-4 pointer-events-none">
@@ -1616,8 +2189,16 @@ export default function App() {
           onOpenProfile={() => setScreen('profile')}
           onOpenSubscription={() => setScreen('subscription')}
           onOpenDocuments={() => setScreen('documents-list')}
+          onOpenLegalBrowser={() => setScreen('legal-browser')}
+          onOpenLegalNews={() => setScreen('legal-news')}
           daysLeftInTrial={daysLeftInTrial}
         />
+      )}
+      {screen === 'legal-browser' && (
+        <LegalBrowserScreen onBack={() => setScreen('home')} />
+      )}
+      {screen === 'legal-news' && (
+        <LegalNewsScreen onBack={() => setScreen('home')} />
       )}
       {screen === 'documents-list' && (
         <DocumentsListScreen
