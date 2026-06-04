@@ -19,6 +19,31 @@ import {
 const ICONS = { Stethoscope, Scale, Wallet };
 
 /* ============================================================
+   STICKY BACK BUTTON — фиксированная кнопка назад
+   Всегда видна при скролле, поверх любого контента
+   ============================================================ */
+function StickyBack({ onClick, dark = false }) {
+  return (
+    <button
+      onClick={() => { hapticFeedback('light'); onClick(); }}
+      style={{
+        position: 'fixed',
+        top: 'calc(env(safe-area-inset-top, 0px) + 12px)',
+        left: '16px',
+        zIndex: 9999,
+      }}
+      className={`w-11 h-11 rounded-2xl flex items-center justify-center shadow-lg backdrop-blur-md border transition-all active:scale-95 ${
+        dark
+          ? 'bg-black/40 border-white/15 text-white'
+          : 'bg-white/90 border-black/10 text-gray-800'
+      }`}
+    >
+      <ChevronLeft className="w-5 h-5" strokeWidth={2.5} />
+    </button>
+  );
+}
+
+/* ============================================================
    STORAGE
    ============================================================ */
 function saveData(key, value) {
@@ -755,6 +780,7 @@ function AgentChat({ agent, messages, onSend, onBack, loading }) {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F5F3F0]">
+      <StickyBack onClick={onBack} dark />
       {/* Header */}
       <div className={`bg-gradient-to-br ${agent.gradient} text-white px-4 pt-12 pb-5 relative overflow-hidden`}>
         <div className="absolute inset-0 opacity-20 pointer-events-none">
@@ -935,6 +961,7 @@ function ProfileScreen({ user, onBack, onLogout, onOpenSubscription, daysLeftInT
 
   return (
     <div className="min-h-screen bg-[#F5F3F0] pb-28">
+      <StickyBack onClick={onBack} dark />
       {/* Hero */}
       <div className="relative bg-stone-950 overflow-hidden px-5 pt-14 pb-14 rounded-b-[32px]">
         <div className="absolute inset-0 pointer-events-none">
@@ -1064,6 +1091,7 @@ function SubscriptionScreen({ onBack, onSubscribe, daysLeftInTrial }) {
 
   return (
     <div className="min-h-screen bg-[#F5F3F0]">
+      <StickyBack onClick={onBack} dark />
       {/* Hero */}
       <div className="relative bg-gradient-to-br from-violet-600 via-indigo-600 to-blue-700 text-white px-5 pt-14 pb-12 rounded-b-[32px] overflow-hidden noise">
         <div className="absolute inset-0 pointer-events-none">
@@ -1172,6 +1200,7 @@ function DocumentsListScreen({ onBack, onSelectTemplate }) {
 
   return (
     <div className="min-h-screen bg-[#F5F3F0] pb-10">
+      <StickyBack onClick={onBack} dark />
       {/* Header */}
       <div className="relative bg-gradient-to-br from-slate-700 to-slate-900 text-white px-5 pt-14 pb-10 rounded-b-[32px] overflow-hidden">
         <div className="absolute inset-0 pointer-events-none">
@@ -1272,6 +1301,7 @@ function DocumentFormScreen({ template, onBack, onGenerated }) {
 
   return (
     <div className="min-h-screen bg-[#F5F3F0] pb-10">
+      <StickyBack onClick={onBack} dark />
       <div className="bg-gradient-to-br from-slate-700 to-slate-900 text-white px-5 pt-14 pb-8 rounded-b-[32px]">
         <button onClick={onBack}
                 className="w-10 h-10 bg-white/10 border border-white/15 rounded-2xl flex items-center justify-center mb-4">
@@ -1468,6 +1498,7 @@ function DocumentResultScreen({ document, onBack, onNew, templateId, fields, ini
 
   return (
     <div className="min-h-screen bg-[#F5F3F0] pb-10">
+      <StickyBack onClick={onBack} dark />
       <div className="bg-gradient-to-br from-emerald-500 to-teal-600 text-white px-5 pt-14 pb-8 rounded-b-[32px] overflow-hidden relative">
         <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/10 rounded-full blur-2xl" />
         <button onClick={onBack}
@@ -1611,6 +1642,7 @@ function LegalNewsScreen({ onBack }) {
 
   return (
     <div className="min-h-screen bg-[#F4F2EF] pb-10">
+      <StickyBack onClick={onBack} dark />
       {/* ── HERO ── */}
       <div className="relative overflow-hidden rounded-b-[36px]"
            style={{ background: 'linear-gradient(160deg, #0f172a 0%, #1e1b4b 50%, #312e81 100%)' }}>
@@ -1860,6 +1892,7 @@ function LegalBrowserScreen({ onBack }) {
 
   return (
     <div className="min-h-screen bg-[#F5F3F0] pb-10">
+      <StickyBack onClick={onBack} dark />
       {/* Header */}
       <div className="relative bg-gradient-to-br from-indigo-700 via-violet-700 to-purple-800 text-white px-5 pt-14 pb-8 rounded-b-[32px] overflow-hidden">
         <div className="absolute inset-0 pointer-events-none">
